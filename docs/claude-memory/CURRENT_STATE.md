@@ -26,16 +26,20 @@ A realistic Flappy Bird clone — a hawk soaring through themed worlds. Built as
 - Selections persisted to localStorage
 
 ## World Details
-- **Snowy Mountains**: Blue sky, snow-capped mountains, pine trees, white ground, snowflakes
+- **Snowy Mountains**: Blue sky, clouds (snow falls from them), snow-capped mountains, pine trees, white ground, snowflakes
 - **Forest**: Blue-green sky, green hills, round trees, grass ground, leaf particles
 - **Desert**: Orange sky, sand dunes, cacti, sandy ground, dust particles
 - **Moon**: Black starry sky, sun (top-left with glow), Earth (top-right), no mountains, craters in ground, upward-floating dust
 
 ## Architecture
-Single file `mountain-hawk/index.html` (~1300 lines). Organized into sections:
+Single file `mountain-hawk/index.html` (~1400 lines). Organized into sections:
 CONSTANTS → SKINS → WORLDS → CANVAS SETUP → GAME STATE → AUDIO → INPUT → PHYSICS → DRAWING FUNCTIONS → GAME LOOP
 
-## Pillar caps removed (flat edges)
+## Key Visual Details
+- Pillar caps removed (flat edges)
+- Clouds in snow world with snowflakes spawning from cloud layer
+- Mobile-friendly CSS (full width on small screens)
+- Fixed timestep physics (consistent speed on 60Hz and 120Hz)
 
 ## Specs & Plans
 - `docs/superpowers/specs/2026-03-29-mountain-hawk-design.md` — original game spec
