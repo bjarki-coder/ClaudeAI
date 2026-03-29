@@ -93,6 +93,64 @@ let player = {
 };
 
 // ============================================================
+// ENTITIES
+// ============================================================
+let entities = [];
+
+function spawnClam(x, y) {
+  entities.push({ type: 'clam', x, y, vx: 0, vy: 0, size: 0.6, health: 5, maxHealth: 5, coins: 2, bfGain: 1, hpGain: 2, sizeGain: 0.002 });
+}
+
+function spawnSeashell(x, y) {
+  entities.push({ type: 'seashell', x, y, vx: 0, vy: 0, size: 0.4, health: 3, maxHealth: 3, coins: 1, bfGain: 1, hpGain: 1, sizeGain: 0.001 });
+}
+
+function spawnClownfish(x, y) {
+  entities.push({
+    type: 'clownfish', x, y,
+    vx: (Math.random() - 0.5) * 1.5, vy: (Math.random() - 0.5) * 0.5,
+    size: 0.5, health: 8, maxHealth: 8,
+    coins: 3, bfGain: 2, hpGain: 3, sizeGain: 0.005,
+    turnTimer: Math.random() * 3, swimTimer: 0
+  });
+}
+
+function spawnMeat(x, y, meatSize) {
+  entities.push({
+    type: 'meat', x, y,
+    vx: (Math.random() - 0.5) * 2, vy: 0.5 + Math.random(),
+    size: meatSize, health: meatSize * 10, maxHealth: meatSize * 10,
+    coins: Math.ceil(meatSize * 5), bfGain: Math.ceil(meatSize * 2), hpGain: Math.ceil(meatSize * 3), sizeGain: meatSize * 0.005,
+    lifetime: 30
+  });
+}
+
+function dropMeat(x, y, count, totalSize) {
+  const pieceSize = totalSize / count;
+  for (let i = 0; i < count; i++) {
+    spawnMeat(x + (Math.random() - 0.5) * 30, y + (Math.random() - 0.5) * 20, pieceSize);
+  }
+}
+
+function initEntities() {
+  entities = [];
+  for (let x = 50; x < WORLD_W; x += 80 + Math.random() * 120) {
+    if (Math.random() > 0.5) {
+      spawnClam(x, WORLD_H - 70 + Math.random() * 10);
+    } else {
+      spawnSeashell(x, WORLD_H - 68 + Math.random() * 8);
+    }
+  }
+  for (let i = 0; i < 30; i++) {
+    const sx = 200 + Math.random() * (WORLD_W - 400);
+    const sy = 100 + Math.random() * (WORLD_H - 250);
+    for (let j = 0; j < 3 + Math.floor(Math.random() * 3); j++) {
+      spawnClownfish(sx + (Math.random() - 0.5) * 80, sy + (Math.random() - 0.5) * 40);
+    }
+  }
+}
+
+// ============================================================
 // INPUT
 // ============================================================
 const keysDown = {};
@@ -320,6 +378,161 @@ function drawPiranha(x, y, size, facingRight, swimTimer, skin, biting, biteCharg
   ctx.restore();
 }
 
+function drawClam(x, y, s) {
+  ctx.fillStyle = '#8B7D6B';
+  ctx.beginPath();
+  ctx.ellipse(x, y, 10 * s, 6 * s, 0, 0, Math.PI);
+  ctx.fill();
+  ctx.fillStyle = '#9B8D7B';
+  ctx.beginPath();
+  ctx.ellipse(x, y, 10 * s, 6 * s, 0, Math.PI, 0);
+  ctx.fill();
+  ctx.strokeStyle = '#7B6D5B';
+  ctx.lineWidth = 0.5;
+  for (let i = -2; i <= 2; i++) {
+    ctx.beginPath();
+    ctx.arc(x, y, (4 + Math.abs(i) * 2) * s, Math.PI, 0);
+    ctx.stroke();
+  }
+}
+
+function drawSeashell(x, y, s) {
+  ctx.fillStyle = '#F0E0C0';
+  ctx.beginPath();
+  ctx.ellipse(x, y, 6 * s, 4 * s, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#D0C0A0';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.arc(x, y, 3 * s, 0, Math.PI * 1.5);
+  ctx.stroke();
+}
+
+function drawClownfish(x, y, s, vx, swimTimer) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (vx < 0) ctx.scale(-1, 1);
+  const tailWag = Math.sin(swimTimer * 10) * 0.2;
+  ctx.fillStyle = '#FF8C00';
+  ctx.beginPath();
+  ctx.moveTo(-10 * s, 0);
+  ctx.lineTo(-16 * s, (-5 + tailWag * 5) * s);
+  ctx.lineTo(-16 * s, (5 + tailWag * 5) * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#FF6600';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 12 * s, 7 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'white';
+  ctx.fillRect(-1 * s, -7 * s, 2.5 * s, 14 * s);
+  ctx.fillRect(5 * s, -6 * s, 2 * s, 12 * s);
+  ctx.beginPath();
+  ctx.arc(7 * s, -2 * s, 2 * s, 0, Math.PI * 2);
+  ctx.fillStyle = 'white';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(7.5 * s, -2 * s, 1 * s, 0, Math.PI * 2);
+  ctx.fillStyle = 'black';
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawMeat(x, y, s) {
+  ctx.fillStyle = '#CC4444';
+  ctx.beginPath();
+  ctx.ellipse(x, y, 8 * s, 5 * s, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#FFAAAA';
+  ctx.beginPath();
+  ctx.ellipse(x + 2 * s, y - 1 * s, 4 * s, 2 * s, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function updateEntities() {
+  for (const e of entities) {
+    if (e.type === 'clownfish') {
+      e.turnTimer -= FIXED_DT;
+      if (e.turnTimer <= 0) {
+        e.vx = (Math.random() - 0.5) * 1.5;
+        e.vy = (Math.random() - 0.5) * 0.5;
+        e.turnTimer = 2 + Math.random() * 3;
+      }
+      e.x += e.vx;
+      e.y += e.vy;
+      if (e.x < 30 || e.x > WORLD_W - 30) e.vx *= -1;
+      if (e.y < 30 || e.y > WORLD_H - 80) e.vy *= -1;
+      e.swimTimer += FIXED_DT;
+    }
+    if (e.type === 'meat') {
+      e.vy += 0.02;
+      e.vx *= 0.99;
+      e.x += e.vx;
+      e.y += e.vy;
+      if (e.y > WORLD_H - 65) { e.y = WORLD_H - 65; e.vy = 0; }
+      e.lifetime -= FIXED_DT;
+      if (e.lifetime <= 0) { e.health = -1; }
+    }
+  }
+  // Remove dead entities
+  for (let i = entities.length - 1; i >= 0; i--) {
+    if (entities[i].health < 0) entities.splice(i, 1);
+  }
+}
+
+function updateBiteCollision() {
+  player.canHitSomething = false;
+  if (!player.biting || !player.alive) return;
+
+  const dir = player.facingRight ? 1 : -1;
+  const mouthX = player.x + dir * 20 * player.size;
+  const mouthY = player.y;
+  const range = BITE_RANGE * player.size;
+
+  for (let i = entities.length - 1; i >= 0; i--) {
+    const e = entities[i];
+    const dx = e.x - mouthX;
+    const dy = e.y - mouthY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const hitDist = range + 10 * e.size;
+
+    if (dist < hitDist) {
+      player.canHitSomething = true;
+
+      // Meat chopping: if meat is too big, break it down
+      if (e.type === 'meat' && e.size > player.size * 0.8) {
+        if (mouseHoldTime < FIXED_DT * 2) {
+          const halfSize = e.size / 2;
+          spawnMeat(e.x - 10, e.y, halfSize);
+          spawnMeat(e.x + 10, e.y, halfSize);
+          entities.splice(i, 1);
+        }
+        break;
+      }
+
+      if (mouseHoldTime < FIXED_DT * 2) {
+        const dmg = player.biteCharged ? player.biteForce * BITE_DAMAGE_MULT : player.biteForce;
+        e.health -= dmg;
+
+        if (e.health <= 0) {
+          if (e.meatCount) {
+            dropMeat(e.x, e.y, e.meatCount, e.size);
+          } else {
+            player.coins += e.coins;
+            player.biteForce += e.bfGain;
+            player.maxHealth += e.hpGain;
+            player.health = Math.min(player.health + e.hpGain, player.maxHealth);
+            player.size += e.sizeGain;
+            localStorage.setItem('deepFeastCoins', player.coins);
+          }
+          entities.splice(i, 1);
+        }
+      }
+      break;
+    }
+  }
+}
+
 // ============================================================
 // GAME LOOP
 // ============================================================
@@ -332,6 +545,8 @@ function gameLoop(timestamp) {
     accumulator -= FIXED_DT;
     updatePlayerInput();
     updatePlayer();
+    updateEntities();
+    updateBiteCollision();
     updateCamera(player.x, player.y);
   }
 
@@ -340,11 +555,23 @@ function gameLoop(timestamp) {
   drawOceanBackground();
   drawOceanFloor();
 
+  // Draw entities (camera culled)
+  for (const e of entities) {
+    const sx = e.x - camX;
+    const sy = e.y - camY;
+    if (sx < -60 || sx > CANVAS_W + 60 || sy < -60 || sy > CANVAS_H + 60) continue;
+    if (e.type === 'clam') drawClam(sx, sy, e.size);
+    else if (e.type === 'seashell') drawSeashell(sx, sy, e.size);
+    else if (e.type === 'clownfish') drawClownfish(sx, sy, e.size, e.vx, e.swimTimer || 0);
+    else if (e.type === 'meat') drawMeat(sx, sy, e.size);
+  }
+
   drawPiranha(player.x - camX, player.y - camY, player.size, player.facingRight, player.swimTimer, 'normal', player.biting, player.biteCharged, player.canHitSomething);
 
   requestAnimationFrame(gameLoop);
 }
 
+initEntities();
 requestAnimationFrame((t) => { lastTime = t; gameLoop(t); });
 </script>
 </body>
