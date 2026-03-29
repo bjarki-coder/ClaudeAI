@@ -33,6 +33,11 @@ const GROUND_H = 60;
 const HAWK_X = 80; // fixed horizontal position
 const HAWK_W = 50;
 const HAWK_H = 30;
+const GRAVITY = 0.5;
+const FLAP_STRENGTH = -8;
+const MAX_FALL_SPEED = 10;
+const MAX_ROTATION = Math.PI / 4;
+const MIN_ROTATION = -Math.PI / 6;
 
 // ============================================================
 // CANVAS SETUP
@@ -50,6 +55,84 @@ let hawkVel = 0;
 let hawkRotation = 0;
 let wingState = 0; // 0=up, 1=level, 2=down
 let wingTimer = 0;
+const STATE_TITLE = 0;
+const STATE_PLAYING = 1;
+const STATE_GAMEOVER = 2;
+let gameState = STATE_TITLE;
+let flapHoldTimer = 0;
+
+// ============================================================
+// INPUT
+// ============================================================
+function handleFlap() {
+  if (gameState === STATE_TITLE) {
+    gameState = STATE_PLAYING;
+    hawkY = CANVAS_H / 2;
+    hawkVel = 0;
+  }
+
+  if (gameState === STATE_PLAYING) {
+    hawkVel = FLAP_STRENGTH;
+    flapHoldTimer = 0;
+  }
+
+  if (gameState === STATE_GAMEOVER) {
+    resetGame();
+  }
+}
+
+function resetGame() {
+  hawkY = CANVAS_H / 2;
+  hawkVel = 0;
+  hawkRotation = 0;
+  scrollX = 0;
+  gameState = STATE_TITLE;
+}
+
+canvas.addEventListener('mousedown', (e) => { e.preventDefault(); handleFlap(); });
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleFlap(); });
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); handleFlap(); }
+});
+
+// ============================================================
+// PHYSICS
+// ============================================================
+function updatePhysics() {
+  if (gameState !== STATE_PLAYING) return;
+
+  // Gravity
+  hawkVel += GRAVITY;
+  if (hawkVel > MAX_FALL_SPEED) hawkVel = MAX_FALL_SPEED;
+  hawkY += hawkVel;
+
+  // Rotation follows velocity
+  const targetRotation = (hawkVel / MAX_FALL_SPEED) * MAX_ROTATION;
+  hawkRotation += (targetRotation - hawkRotation) * 0.15;
+  hawkRotation = Math.max(MIN_ROTATION, Math.min(MAX_ROTATION, hawkRotation));
+
+  // Wing animation driven by physics
+  flapHoldTimer += 1 / 60;
+  if (flapHoldTimer < 0.1) {
+    wingState = 0; // wings up right after flap
+  } else if (hawkVel < 0) {
+    wingState = 1; // level while rising
+  } else {
+    wingState = 2; // down while falling
+  }
+
+  // Ground collision
+  if (hawkY > CANVAS_H - GROUND_H - HAWK_H / 2) {
+    hawkY = CANVAS_H - GROUND_H - HAWK_H / 2;
+    gameState = STATE_GAMEOVER;
+  }
+
+  // Ceiling collision
+  if (hawkY < HAWK_H / 2) {
+    hawkY = HAWK_H / 2;
+    hawkVel = 0;
+  }
+}
 
 // ============================================================
 // DRAWING FUNCTIONS
@@ -235,25 +318,25 @@ function drawBackground() {
 // GAME LOOP
 // ============================================================
 function gameLoop(timestamp) {
-  const dt = (timestamp - lastTime) / 1000; // delta in seconds
+  const dt = (timestamp - lastTime) / 1000;
   lastTime = timestamp;
 
-  // Advance scroll
-  scrollX += SCROLL_SPEED;
+  // Update
+  if (gameState === STATE_PLAYING) {
+    scrollX += SCROLL_SPEED;
+  }
+  updatePhysics();
 
-  // Clear
-  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-
-  // Draw parallax background
-  drawBackground();
-
-  // Animate wings for testing (will be driven by physics later)
-  wingTimer += dt;
-  if (wingTimer > 0.15) {
-    wingTimer = 0;
-    wingState = (wingState + 1) % 3;
+  // Title screen: hawk bobs gently
+  if (gameState === STATE_TITLE) {
+    hawkY = CANVAS_H / 2 + Math.sin(timestamp / 300) * 15;
+    wingTimer += dt;
+    if (wingTimer > 0.3) { wingTimer = 0; wingState = (wingState + 1) % 3; }
   }
 
+  // Draw
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+  drawBackground();
   drawHawk(HAWK_X, hawkY, hawkRotation, wingState);
 
   requestAnimationFrame(gameLoop);
