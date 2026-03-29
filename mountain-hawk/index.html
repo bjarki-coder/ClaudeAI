@@ -74,6 +74,7 @@ let screenFlash = 0;
 let deathAnimTimer = 0;
 let deathHawkVel = 0;
 let hawkCryTimer = 8 + Math.random() * 7;
+let gameOverClickDelay = 0;
 
 // ============================================================
 // AUDIO
@@ -223,6 +224,7 @@ function handleFlap() {
     hawkVel = 0;
     score = 0;
     pillars = [];
+    hawkCryTimer = 8 + Math.random() * 7;
     for (let i = 0; i < 4; i++) {
       pillars.push({
         x: CANVAS_W + i * PILLAR_SPACING,
@@ -238,7 +240,7 @@ function handleFlap() {
     playFlap();
   }
 
-  if (gameState === STATE_GAMEOVER) {
+  if (gameState === STATE_GAMEOVER && gameOverClickDelay <= 0) {
     resetGame();
   }
 }
@@ -263,6 +265,7 @@ document.addEventListener('keydown', (e) => {
 // ============================================================
 function triggerDeath() {
   gameState = STATE_GAMEOVER;
+  gameOverClickDelay = 1.5;
   screenFlash = 0.6;
   deathAnimTimer = 0;
   deathHawkVel = -3;
@@ -762,6 +765,11 @@ function gameLoop(timestamp) {
       playHawkCry();
       hawkCryTimer = 8 + Math.random() * 7;
     }
+  } else {
+    scrollX += SCROLL_SPEED * 0.3;
+  }
+  if (gameState === STATE_GAMEOVER) {
+    gameOverClickDelay -= dt;
   }
   updatePhysics();
   updatePillars();
