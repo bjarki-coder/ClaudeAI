@@ -30,6 +30,11 @@ const CANVAS_W = 400;
 const CANVAS_H = 600;
 const SCROLL_SPEED = 2;
 const GROUND_H = 60;
+const PILLAR_W = 60;
+const GAP_SIZE = 130;
+const PILLAR_SPACING = 220;
+const PILLAR_MIN_TOP = 80;
+const PILLAR_MAX_TOP = CANVAS_H - GROUND_H - GAP_SIZE - 80;
 const HAWK_X = 80; // fixed horizontal position
 const HAWK_W = 50;
 const HAWK_H = 30;
@@ -60,6 +65,7 @@ const STATE_PLAYING = 1;
 const STATE_GAMEOVER = 2;
 let gameState = STATE_TITLE;
 let flapHoldTimer = 0;
+let pillars = [];
 
 // ============================================================
 // INPUT
@@ -69,6 +75,14 @@ function handleFlap() {
     gameState = STATE_PLAYING;
     hawkY = CANVAS_H / 2;
     hawkVel = 0;
+    pillars = [];
+    for (let i = 0; i < 4; i++) {
+      pillars.push({
+        x: CANVAS_W + i * PILLAR_SPACING,
+        topH: PILLAR_MIN_TOP + Math.random() * (PILLAR_MAX_TOP - PILLAR_MIN_TOP),
+        scored: false
+      });
+    }
   }
 
   if (gameState === STATE_PLAYING) {
@@ -86,6 +100,7 @@ function resetGame() {
   hawkVel = 0;
   hawkRotation = 0;
   scrollX = 0;
+  pillars = [];
   gameState = STATE_TITLE;
 }
 
@@ -131,6 +146,24 @@ function updatePhysics() {
   if (hawkY < HAWK_H / 2) {
     hawkY = HAWK_H / 2;
     hawkVel = 0;
+  }
+}
+
+function updatePillars() {
+  if (gameState !== STATE_PLAYING) return;
+
+  for (let i = 0; i < pillars.length; i++) {
+    pillars[i].x -= SCROLL_SPEED;
+  }
+
+  if (pillars.length > 0 && pillars[0].x < -PILLAR_W) {
+    pillars.shift();
+    const lastX = pillars[pillars.length - 1].x;
+    pillars.push({
+      x: lastX + PILLAR_SPACING,
+      topH: PILLAR_MIN_TOP + Math.random() * (PILLAR_MAX_TOP - PILLAR_MIN_TOP),
+      scored: false
+    });
   }
 }
 
@@ -306,6 +339,50 @@ function drawHawk(x, y, rotation, wing) {
   ctx.restore();
 }
 
+function drawPillar(x, topH) {
+  const bottomY = topH + GAP_SIZE;
+  const bottomH = CANVAS_H - GROUND_H - bottomY;
+
+  // Top pillar
+  const topGrad = ctx.createLinearGradient(x, 0, x + PILLAR_W, 0);
+  topGrad.addColorStop(0, '#5A5A5A');
+  topGrad.addColorStop(0.5, '#7A7A7A');
+  topGrad.addColorStop(1, '#5A5A5A');
+  ctx.fillStyle = topGrad;
+  ctx.fillRect(x, 0, PILLAR_W, topH);
+
+  // Top pillar snow
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.beginPath();
+  ctx.ellipse(x + PILLAR_W / 2, topH, PILLAR_W / 2 + 4, 8, 0, 0, Math.PI);
+  ctx.fill();
+
+  // Bottom pillar
+  const botGrad = ctx.createLinearGradient(x, bottomY, x + PILLAR_W, bottomY);
+  botGrad.addColorStop(0, '#5A5A5A');
+  botGrad.addColorStop(0.5, '#7A7A7A');
+  botGrad.addColorStop(1, '#5A5A5A');
+  ctx.fillStyle = botGrad;
+  ctx.fillRect(x, bottomY, PILLAR_W, bottomH);
+
+  // Bottom pillar snow cap
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.beginPath();
+  ctx.ellipse(x + PILLAR_W / 2, bottomY, PILLAR_W / 2 + 4, 8, 0, Math.PI, Math.PI * 2);
+  ctx.fill();
+
+  // Subtle shadow on left side
+  ctx.fillStyle = 'rgba(0,0,0,0.1)';
+  ctx.fillRect(x, 0, 6, topH);
+  ctx.fillRect(x, bottomY, 6, bottomH);
+}
+
+function drawPillars() {
+  for (const p of pillars) {
+    drawPillar(p.x, p.topH);
+  }
+}
+
 function drawBackground() {
   drawSky();
   drawMountainLayer(0.2, CANVAS_H - 100, 140, 8,  'rgba(160,170,185,0.7)',  'rgba(255,255,255,0.6)');
@@ -326,6 +403,7 @@ function gameLoop(timestamp) {
     scrollX += SCROLL_SPEED;
   }
   updatePhysics();
+  updatePillars();
 
   // Title screen: hawk bobs gently
   if (gameState === STATE_TITLE) {
@@ -337,6 +415,7 @@ function gameLoop(timestamp) {
   // Draw
   ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
   drawBackground();
+  drawPillars();
   drawHawk(HAWK_X, hawkY, hawkRotation, wingState);
 
   requestAnimationFrame(gameLoop);
