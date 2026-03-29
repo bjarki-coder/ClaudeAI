@@ -47,6 +47,69 @@ const MAX_ROTATION = Math.PI / 4;
 const MIN_ROTATION = -Math.PI / 6;
 
 // ============================================================
+// SKINS
+// ============================================================
+const SKINS = [
+  {
+    name: 'Hawk', body: '#6B3D1F', chest: '#8B5A2B', belly: '#D4A96A',
+    wing: '#5C3A1E', wingStroke: '#4A2E14', tail: '#4A2E14',
+    eyePatch: '#F5F0E0', eyeColor: '#E8A000', pupil: '#111',
+    beak: '#E8901A', beakTip: '#C07010', eyebrow: '#2A1A0A'
+  },
+  {
+    name: 'Fire Bird', body: '#CC2200', chest: '#FF4400', belly: '#FF8800',
+    wing: '#AA0000', wingStroke: '#880000', tail: '#880000',
+    eyePatch: '#FFE0A0', eyeColor: '#FFFF00', pupil: '#111',
+    beak: '#FF6600', beakTip: '#CC4400', eyebrow: '#660000'
+  },
+  {
+    name: 'Ice Bird', body: '#88CCEE', chest: '#AADDFF', belly: '#DDEEFF',
+    wing: '#66AACC', wingStroke: '#4488AA', tail: '#4488AA',
+    eyePatch: '#FFFFFF', eyeColor: '#FFFFFF', pupil: '#336688',
+    beak: '#99DDFF', beakTip: '#77BBDD', eyebrow: '#446688'
+  },
+  {
+    name: 'Robo Bird', body: '#777788', chest: '#8888AA', belly: '#AAAACC',
+    wing: '#555566', wingStroke: '#444455', tail: '#444455',
+    eyePatch: '#AAAABB', eyeColor: '#00FF00', pupil: '#003300',
+    beak: '#999999', beakTip: '#777777', eyebrow: '#333344'
+  },
+  {
+    name: 'Rainbow', body: null, chest: null, belly: null,
+    wing: null, wingStroke: null, tail: null,
+    eyePatch: '#FFFFFF', eyeColor: '#FF00FF', pupil: '#111',
+    beak: '#FF8800', beakTip: '#CC6600', eyebrow: '#333333',
+    rainbow: true
+  },
+  {
+    name: 'Ghost', body: 'rgba(200,200,220,0.6)', chest: 'rgba(180,180,200,0.5)',
+    belly: 'rgba(220,220,240,0.4)', wing: 'rgba(160,160,180,0.5)',
+    wingStroke: 'rgba(130,130,150,0.4)', tail: 'rgba(130,130,150,0.4)',
+    eyePatch: 'rgba(220,220,240,0.5)', eyeColor: '#AACCFF', pupil: '#334455',
+    beak: 'rgba(200,200,220,0.7)', beakTip: 'rgba(170,170,190,0.6)',
+    eyebrow: 'rgba(100,100,120,0.5)'
+  }
+];
+
+function getSkinColors(skinIndex, timestamp) {
+  const skin = SKINS[skinIndex];
+  if (!skin.rainbow) return skin;
+  const hue = (timestamp / 10) % 360;
+  return {
+    name: skin.name,
+    body: `hsl(${hue},80%,45%)`,
+    chest: `hsl(${(hue + 40) % 360},80%,55%)`,
+    belly: `hsl(${(hue + 80) % 360},80%,65%)`,
+    wing: `hsl(${(hue - 30 + 360) % 360},80%,40%)`,
+    wingStroke: `hsl(${(hue - 30 + 360) % 360},80%,30%)`,
+    tail: `hsl(${(hue + 180) % 360},80%,35%)`,
+    eyePatch: skin.eyePatch, eyeColor: skin.eyeColor, pupil: skin.pupil,
+    beak: skin.beak, beakTip: skin.beakTip, eyebrow: skin.eyebrow,
+    rainbow: true
+  };
+}
+
+// ============================================================
 // CANVAS SETUP
 // ============================================================
 const canvas = document.getElementById('game');
@@ -78,6 +141,7 @@ let deathAnimTimer = 0;
 let deathHawkVel = 0;
 let hawkCryTimer = 8 + Math.random() * 7;
 let gameOverClickDelay = 0;
+let currentSkin = parseInt(localStorage.getItem('mountainHawkSkin')) || 0;
 
 // ============================================================
 // AUDIO
@@ -291,7 +355,7 @@ function triggerDeath() {
       vx: (Math.random() - 0.5) * 6,
       vy: -Math.random() * 5,
       r: 1.5 + Math.random() * 2,
-      color: Math.random() > 0.5 ? '#7A4E2A' : '#DDDDDD',
+      color: Math.random() > 0.5 ? (SKINS[currentSkin].wing || '#7A4E2A') : '#DDDDDD',
       life: 1.0
     });
   }
@@ -473,13 +537,13 @@ function drawGround() {
   ctx.fillRect(0, CANVAS_H - GROUND_H, CANVAS_W, GROUND_H);
 }
 
-function drawHawk(x, y, rotation, wing) {
+function drawHawk(x, y, rotation, wing, skin) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(rotation);
 
   // Tail feathers
-  ctx.fillStyle = '#4A2E14';
+  ctx.fillStyle = skin.tail;
   ctx.beginPath();
   ctx.moveTo(-14, -2);
   ctx.lineTo(-24, -6);
@@ -489,96 +553,89 @@ function drawHawk(x, y, rotation, wing) {
   ctx.closePath();
   ctx.fill();
 
-  // Body — round like Flappy Bird
+  // Body
   ctx.beginPath();
   ctx.ellipse(0, 0, 16, 14, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#6B3D1F';
+  ctx.fillStyle = skin.body;
   ctx.fill();
 
-  // Belly (lighter patch — Flappy Bird style)
+  // Belly
   ctx.beginPath();
   ctx.ellipse(3, 5, 10, 8, 0, Math.PI, Math.PI * 2);
-  ctx.fillStyle = '#D4A96A';
+  ctx.fillStyle = skin.belly;
   ctx.fill();
 
-  // Chest/breast lighter area
+  // Chest
   ctx.beginPath();
   ctx.ellipse(6, 0, 8, 10, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#8B5A2B';
+  ctx.fillStyle = skin.chest;
   ctx.fill();
 
-  // Wing — single wing like Flappy Bird (side view)
-  ctx.fillStyle = '#5C3A1E';
+  // Wing
+  ctx.fillStyle = skin.wing;
   ctx.beginPath();
   if (wing === 0) {
-    // Wing up
     ctx.moveTo(-4, -4);
     ctx.quadraticCurveTo(-14, -22, -8, -24);
     ctx.quadraticCurveTo(-2, -18, 2, -10);
     ctx.quadraticCurveTo(0, -6, -4, -4);
   } else if (wing === 1) {
-    // Wing level
     ctx.moveTo(-4, -2);
     ctx.quadraticCurveTo(-18, -6, -20, -2);
     ctx.quadraticCurveTo(-18, 2, -4, 2);
     ctx.quadraticCurveTo(-2, 0, -4, -2);
   } else {
-    // Wing down
     ctx.moveTo(-4, 2);
     ctx.quadraticCurveTo(-14, 16, -6, 20);
     ctx.quadraticCurveTo(0, 14, 2, 8);
     ctx.quadraticCurveTo(0, 4, -4, 2);
   }
   ctx.fill();
-  // Wing feather detail
-  ctx.strokeStyle = '#4A2E14';
+  ctx.strokeStyle = skin.wingStroke;
   ctx.lineWidth = 0.5;
   ctx.stroke();
 
-  // White eye patch (like a real hawk)
+  // Eye patch
   ctx.beginPath();
   ctx.ellipse(10, -4, 6, 5.5, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#F5F0E0';
+  ctx.fillStyle = skin.eyePatch;
   ctx.fill();
 
-  // Eye — big like Flappy Bird
+  // Eye
   ctx.beginPath();
   ctx.arc(11, -4, 4, 0, Math.PI * 2);
-  ctx.fillStyle = '#E8A000';
+  ctx.fillStyle = skin.eyeColor;
   ctx.fill();
-  // Pupil
   ctx.beginPath();
   ctx.arc(12, -4, 2, 0, Math.PI * 2);
-  ctx.fillStyle = '#111';
+  ctx.fillStyle = skin.pupil;
   ctx.fill();
-  // Eye shine
   ctx.beginPath();
   ctx.arc(12.8, -5.2, 0.8, 0, Math.PI * 2);
   ctx.fillStyle = 'white';
   ctx.fill();
 
-  // Dark hawk eyebrow stripe (realistic detail)
+  // Eyebrow
   ctx.beginPath();
   ctx.moveTo(6, -8);
   ctx.quadraticCurveTo(10, -10, 15, -8);
   ctx.lineWidth = 1.5;
-  ctx.strokeStyle = '#2A1A0A';
+  ctx.strokeStyle = skin.eyebrow;
   ctx.stroke();
 
-  // Beak — hooked like a hawk, orange like Flappy Bird
+  // Beak
   ctx.beginPath();
   ctx.moveTo(15, -3);
   ctx.quadraticCurveTo(22, -2, 21, 1);
   ctx.quadraticCurveTo(19, 3, 16, 1);
   ctx.closePath();
-  ctx.fillStyle = '#E8901A';
+  ctx.fillStyle = skin.beak;
   ctx.fill();
-  // Beak hook tip
   ctx.beginPath();
   ctx.moveTo(21, 1);
   ctx.quadraticCurveTo(22, 2, 20, 3);
   ctx.quadraticCurveTo(19, 3, 19, 2);
-  ctx.fillStyle = '#C07010';
+  ctx.fillStyle = skin.beakTip;
   ctx.fill();
 
   ctx.restore();
@@ -835,7 +892,8 @@ function gameLoop(timestamp) {
   drawBackground();
   drawPillars();
   drawSnowflakes();
-  drawHawk(HAWK_X, hawkY, hawkRotation, wingState);
+  const skin = getSkinColors(currentSkin, timestamp);
+  drawHawk(HAWK_X, hawkY, hawkRotation, wingState, skin);
   drawFeathers();
   drawScreenFlash();
 
