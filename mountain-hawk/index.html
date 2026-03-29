@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mountain Hawk</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  canvas {
+    border-radius: 4px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+  }
+</style>
+</head>
+<body>
+<canvas id="game" width="400" height="600"></canvas>
+<script>
+// ============================================================
+// CONSTANTS
+// ============================================================
+const CANVAS_W = 400;
+const CANVAS_H = 600;
+
+// ============================================================
+// CANVAS SETUP
+// ============================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// ============================================================
+// GAME STATE
+// ============================================================
+let lastTime = 0;
+
+// ============================================================
+// GAME LOOP
+// ============================================================
+function gameLoop(timestamp) {
+  const dt = (timestamp - lastTime) / 1000; // delta in seconds
+  lastTime = timestamp;
+
+  // Clear
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // Temp: draw a blue sky to prove it works
+  ctx.fillStyle = '#87CEEB';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame((t) => { lastTime = t; gameLoop(t); });
+</script>
+</body>
+</html>
