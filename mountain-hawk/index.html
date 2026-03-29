@@ -909,22 +909,12 @@ function drawPillar(x, topH, gap) {
   ctx.fillStyle = topGrad;
   ctx.fillRect(x, 0, PILLAR_W, topH);
 
-  ctx.fillStyle = world.pillarCap;
-  ctx.beginPath();
-  ctx.ellipse(x + PILLAR_W / 2, topH, PILLAR_W / 2 + 4, 8, 0, 0, Math.PI);
-  ctx.fill();
-
   const botGrad = ctx.createLinearGradient(x, bottomY, x + PILLAR_W, bottomY);
   botGrad.addColorStop(0, world.pillarDark);
   botGrad.addColorStop(0.5, world.pillarLight);
   botGrad.addColorStop(1, world.pillarDark);
   ctx.fillStyle = botGrad;
   ctx.fillRect(x, bottomY, PILLAR_W, bottomH);
-
-  ctx.fillStyle = world.pillarCap;
-  ctx.beginPath();
-  ctx.ellipse(x + PILLAR_W / 2, bottomY, PILLAR_W / 2 + 4, 8, 0, Math.PI, Math.PI * 2);
-  ctx.fill();
 
   ctx.fillStyle = 'rgba(0,0,0,0.1)';
   ctx.fillRect(x, 0, 6, topH);
