@@ -20,6 +20,19 @@
     height: 90vh;
     width: 90vh;
     image-rendering: pixelated;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  @media (max-width: 768px), (max-height: 500px) {
+    canvas {
+      width: 100vw;
+      height: 100vw;
+      max-height: 100vh;
+      border-radius: 0;
+      box-shadow: none;
+    }
   }
 </style>
 </head>
