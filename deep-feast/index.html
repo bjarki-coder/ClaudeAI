@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deep Feast</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a1628;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  canvas {
+    border-radius: 4px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    height: 90vh;
+    width: 90vh;
+    image-rendering: pixelated;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  @media (max-width: 768px), (max-height: 500px) {
+    canvas { width: 100vw; height: 100vw; max-height: 100vh; border-radius: 0; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game" width="600" height="600"></canvas>
+<script>
+// ============================================================
+// CONSTANTS
+// ============================================================
+const CANVAS_W = 600;
+const CANVAS_H = 600;
+const WORLD_W = 6000;
+const WORLD_H = 800;
+const FIXED_DT = 1 / 60;
+
+// ============================================================
+// CANVAS SETUP
+// ============================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// ============================================================
+// CAMERA
+// ============================================================
+let camX = 0;
+let camY = 0;
+
+function updateCamera(targetX, targetY) {
+  camX = Math.max(0, Math.min(WORLD_W - CANVAS_W, targetX - CANVAS_W / 2));
+  camY = Math.max(0, Math.min(WORLD_H - CANVAS_H, targetY - CANVAS_H / 2));
+}
+
+// ============================================================
+// GAME STATE
+// ============================================================
+let lastTime = 0;
+let accumulator = 0;
+
+// Test position for camera
+let testX = WORLD_W / 2;
+let testY = WORLD_H / 2;
+
+// ============================================================
+// INPUT (temp — will be replaced in Task 2)
+// ============================================================
+const keysDown = {};
+document.addEventListener('keydown', (e) => { keysDown[e.code] = true; });
+document.addEventListener('keyup', (e) => { keysDown[e.code] = false; });
+
+function updateTestInput() {
+  const spd = 4;
+  if (keysDown['ArrowLeft'] || keysDown['KeyA']) testX -= spd;
+  if (keysDown['ArrowRight'] || keysDown['KeyD']) testX += spd;
+  if (keysDown['ArrowUp'] || keysDown['KeyW']) testY -= spd;
+  if (keysDown['ArrowDown'] || keysDown['KeyS']) testY += spd;
+  testX = Math.max(0, Math.min(WORLD_W, testX));
+  testY = Math.max(0, Math.min(WORLD_H, testY));
+}
+
+// ============================================================
+// DRAWING
+// ============================================================
+function drawOceanBackground() {
+  const grad = ctx.createLinearGradient(0, -camY, 0, WORLD_H - camY);
+  grad.addColorStop(0, '#2898E0');
+  grad.addColorStop(0.3, '#1E80C8');
+  grad.addColorStop(0.7, '#1668A8');
+  grad.addColorStop(1, '#0E5090');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // Light rays from top
+  ctx.save();
+  ctx.globalAlpha = 0.06;
+  for (let i = 0; i < 5; i++) {
+    const rx = (i * 180 + 50 - camX * 0.05) % (CANVAS_W + 200) - 100;
+    ctx.beginPath();
+    ctx.moveTo(rx, -camY);
+    ctx.lineTo(rx - 40, CANVAS_H);
+    ctx.lineTo(rx + 40, CANVAS_H);
+    ctx.closePath();
+    ctx.fillStyle = '#FFFFCC';
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawOceanFloor() {
+  const floorY = WORLD_H - 60 - camY;
+  if (floorY > CANVAS_H) return;
+
+  // Sand
+  const sandGrad = ctx.createLinearGradient(0, floorY, 0, floorY + 60);
+  sandGrad.addColorStop(0, '#C4A56B');
+  sandGrad.addColorStop(1, '#A08050');
+  ctx.fillStyle = sandGrad;
+  ctx.fillRect(0, Math.max(0, floorY), CANVAS_W, 60);
+
+  // Coral
+  const startTile = Math.floor(camX / 200);
+  for (let t = startTile - 1; t <= startTile + 4; t++) {
+    const bx = t * 200 + 100 - camX;
+    const by = floorY;
+    if (bx < -100 || bx > CANVAS_W + 100) continue;
+    const hue = (t * 73) % 360;
+    ctx.fillStyle = `hsl(${hue}, 60%, 55%)`;
+    ctx.beginPath();
+    ctx.ellipse(bx, by, 20 + (t % 3) * 8, 15 + (t % 4) * 5, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = `hsl(${hue}, 60%, 65%)`;
+    ctx.beginPath();
+    ctx.ellipse(bx, by - 5, 12 + (t % 2) * 4, 10 + (t % 3) * 3, 0, Math.PI, 0);
+    ctx.fill();
+  }
+}
+
+// ============================================================
+// GAME LOOP
+// ============================================================
+function gameLoop(timestamp) {
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
+  lastTime = timestamp;
+  accumulator += dt;
+
+  while (accumulator >= FIXED_DT) {
+    accumulator -= FIXED_DT;
+    updateTestInput();
+    updateCamera(testX, testY);
+  }
+
+  // Draw
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+  drawOceanBackground();
+  drawOceanFloor();
+
+  // Draw test marker
+  ctx.fillStyle = 'red';
+  ctx.beginPath();
+  ctx.arc(testX - camX, testY - camY, 10, 0, Math.PI * 2);
+  ctx.fill();
+
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame((t) => { lastTime = t; gameLoop(t); });
+</script>
+</body>
+</html>
