@@ -28,6 +28,8 @@
 // ============================================================
 const CANVAS_W = 400;
 const CANVAS_H = 600;
+const SCROLL_SPEED = 2;
+const GROUND_H = 60;
 
 // ============================================================
 // CANVAS SETUP
@@ -39,6 +41,112 @@ const ctx = canvas.getContext('2d');
 // GAME STATE
 // ============================================================
 let lastTime = 0;
+let scrollX = 0;
+
+// ============================================================
+// DRAWING FUNCTIONS
+// ============================================================
+function drawSky() {
+  const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+  grad.addColorStop(0,    '#5B86B8');
+  grad.addColorStop(0.4,  '#8BACC8');
+  grad.addColorStop(0.7,  '#B8C8D8');
+  grad.addColorStop(1.0,  '#D8DDE4');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+}
+
+function drawMountainLayer(scrollFactor, baseY, height, peakCount, color, snowColor) {
+  const offset = (scrollX * scrollFactor) % CANVAS_W;
+
+  for (let copy = -1; copy <= 1; copy++) {
+    const shiftX = copy * CANVAS_W - offset;
+    const peakSpacing = CANVAS_W / peakCount;
+
+    // Collect peak positions
+    const peaks = [];
+    for (let i = 0; i <= peakCount; i++) {
+      const px = shiftX + i * peakSpacing;
+      const py = baseY - height * 0.4 - Math.sin(i * 2.7 + peakCount) * height * 0.6;
+      peaks.push({ x: px, y: py });
+    }
+
+    // Draw filled mountain silhouette
+    ctx.beginPath();
+    ctx.moveTo(shiftX, CANVAS_H);
+    ctx.lineTo(peaks[0].x, peaks[0].y);
+
+    for (let i = 1; i < peaks.length; i++) {
+      const cpx = (peaks[i - 1].x + peaks[i].x) / 2;
+      const cpy = (peaks[i - 1].y + peaks[i].y) / 2;
+      ctx.quadraticCurveTo(peaks[i - 1].x, peaks[i - 1].y, cpx, cpy);
+    }
+
+    const last = peaks[peaks.length - 1];
+    ctx.lineTo(last.x, last.y);
+    ctx.lineTo(last.x, CANVAS_H);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    // Draw snow caps
+    if (snowColor) {
+      for (let i = 0; i < peaks.length - 1; i++) {
+        const px = peaks[i].x;
+        const py = peaks[i].y;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px - 12, py + 10);
+        ctx.lineTo(px + 12, py + 10);
+        ctx.closePath();
+        ctx.fillStyle = snowColor;
+        ctx.fill();
+      }
+    }
+  }
+}
+
+function drawPineTrees(scrollFactor) {
+  const treeBaseY = CANVAS_H - GROUND_H;
+  const offset = (scrollX * scrollFactor) % CANVAS_W;
+  const treeCount = 12;
+  const treeSpacing = CANVAS_W / treeCount;
+
+  for (let copy = -1; copy <= 1; copy++) {
+    const shiftX = copy * CANVAS_W - offset;
+
+    for (let i = 0; i < treeCount; i++) {
+      const tx = shiftX + i * treeSpacing + treeSpacing / 2;
+      const treeH = 25 + Math.sin(i * 3.1) * 15;
+      const treeW = treeH * 0.5;
+      const color = i % 2 === 0 ? '#1A3A0A' : '#2D5016';
+
+      ctx.beginPath();
+      ctx.moveTo(tx, treeBaseY - treeH);
+      ctx.lineTo(tx - treeW, treeBaseY);
+      ctx.lineTo(tx + treeW, treeBaseY);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+  }
+}
+
+function drawGround() {
+  const grad = ctx.createLinearGradient(0, CANVAS_H - GROUND_H, 0, CANVAS_H);
+  grad.addColorStop(0,   '#C8C8C8');
+  grad.addColorStop(1.0, '#FFFFFF');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, CANVAS_H - GROUND_H, CANVAS_W, GROUND_H);
+}
+
+function drawBackground() {
+  drawSky();
+  drawMountainLayer(0.2, CANVAS_H - 100, 140, 8,  'rgba(160,170,185,0.7)',  'rgba(255,255,255,0.6)');
+  drawMountainLayer(0.5, CANVAS_H - 70,  120, 10, 'rgba(120,130,145,0.85)', 'rgba(255,255,255,0.8)');
+  drawPineTrees(0.8);
+  drawGround();
+}
 
 // ============================================================
 // GAME LOOP
@@ -47,12 +155,14 @@ function gameLoop(timestamp) {
   const dt = (timestamp - lastTime) / 1000; // delta in seconds
   lastTime = timestamp;
 
+  // Advance scroll
+  scrollX += SCROLL_SPEED;
+
   // Clear
   ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
-  // Temp: draw a blue sky to prove it works
-  ctx.fillStyle = '#87CEEB';
-  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  // Draw parallax background
+  drawBackground();
 
   requestAnimationFrame(gameLoop);
 }
