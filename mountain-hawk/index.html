@@ -138,7 +138,8 @@ const WORLDS = [
     groundTop: '#C8C8C8', groundBot: '#FFFFFF',
     pillarDark: '#5A5A5A', pillarLight: '#7A7A7A', pillarCap: 'rgba(255,255,255,0.85)',
     particleColor: '255,255,255', particleMinO: 0.3, particleMaxO: 0.8,
-    particleDir: 1, special: null
+    particleDir: 1, special: null,
+    clouds: true
   },
   {
     name: 'Forest',
@@ -961,7 +962,7 @@ function updateParticles() {
     s.y += s.speed;
     s.x += s.drift;
     if (world.particleDir > 0 && s.y > CANVAS_H) {
-      s.y = -5;
+      s.y = world.clouds ? (40 + Math.random() * 60) : -5;
       s.x = Math.random() * CANVAS_W;
     } else if (world.particleDir < 0 && s.y < -5) {
       s.y = CANVAS_H + 5;
@@ -981,9 +982,52 @@ function drawParticles() {
   }
 }
 
+function drawCloud(cx, cy, size) {
+  ctx.fillStyle = 'rgba(220,225,235,0.7)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * 0.5, 0, Math.PI * 2);
+  ctx.arc(cx - size * 0.4, cy + size * 0.1, size * 0.35, 0, Math.PI * 2);
+  ctx.arc(cx + size * 0.45, cy + size * 0.05, size * 0.38, 0, Math.PI * 2);
+  ctx.arc(cx - size * 0.15, cy - size * 0.2, size * 0.3, 0, Math.PI * 2);
+  ctx.arc(cx + size * 0.2, cy - size * 0.15, size * 0.32, 0, Math.PI * 2);
+  ctx.fill();
+  // Lighter top highlight
+  ctx.fillStyle = 'rgba(240,242,248,0.5)';
+  ctx.beginPath();
+  ctx.arc(cx, cy - size * 0.15, size * 0.3, 0, Math.PI * 2);
+  ctx.arc(cx + size * 0.2, cy - size * 0.2, size * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+  // Darker bottom shadow
+  ctx.fillStyle = 'rgba(180,185,200,0.3)';
+  ctx.beginPath();
+  ctx.arc(cx - size * 0.3, cy + size * 0.25, size * 0.25, 0, Math.PI * 2);
+  ctx.arc(cx + size * 0.15, cy + size * 0.25, size * 0.28, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawClouds(scrollFactor) {
+  const offset = (scrollX * scrollFactor) % CANVAS_W;
+  const clouds = [
+    {x: 100, y: 55, s: 40},
+    {x: 300, y: 35, s: 50},
+    {x: 480, y: 65, s: 35},
+    {x: 200, y: 90, s: 30},
+    {x: 550, y: 45, s: 45}
+  ];
+  for (let copy = -1; copy <= 1; copy++) {
+    const shiftX = copy * CANVAS_W - offset;
+    for (const c of clouds) {
+      drawCloud(shiftX + c.x, c.y, c.s);
+    }
+  }
+}
+
 function drawBackground() {
   const world = WORLDS[currentWorld];
   drawSky();
+  if (world.clouds) {
+    drawClouds(0.15);
+  }
   drawMountainLayer(0.2, CANVAS_H - 100, 140, 8, world.farMtn.color, world.farMtn.snow);
   drawMountainLayer(0.5, CANVAS_H - 70, 120, 10, world.nearMtn.color, world.nearMtn.snow);
   drawWorldTrees(0.8);
