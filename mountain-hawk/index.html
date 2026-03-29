@@ -379,7 +379,36 @@ function handleSkinsClick(pos) {
     gameState = STATE_GAMEOVER;
   }
 }
-function handleWorldsClick(pos) { /* Task 5 */ }
+function handleWorldsClick(pos) {
+  const cols = 2;
+  const cardW = 160;
+  const cardH = 180;
+  const gapX = 20;
+  const gapY = 20;
+  const startX = (CANVAS_W - (cols * cardW + (cols - 1) * gapX)) / 2;
+  const startY = 80;
+
+  for (let i = 0; i < WORLDS.length; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const cx = startX + col * (cardW + gapX);
+    const cy = startY + row * (cardH + gapY);
+    if (hitBtn(pos, cx, cy, cardW, cardH)) {
+      currentWorld = i;
+      localStorage.setItem('mountainHawkWorld', currentWorld);
+      initParticles();
+      return;
+    }
+  }
+
+  const backW = 120;
+  const backH = 32;
+  const backX = (CANVAS_W - backW) / 2;
+  const backY = CANVAS_H - 60;
+  if (hitBtn(pos, backX, backY, backW, backH)) {
+    gameState = STATE_GAMEOVER;
+  }
+}
 
 function handleClick(e) {
   e.preventDefault();
@@ -1058,7 +1087,105 @@ function drawSkinsScreen() {
 
   ctx.restore();
 }
-function drawWorldsScreen() { /* Task 5 */ }
+function drawWorldsScreen() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  ctx.save();
+  ctx.textAlign = 'center';
+
+  ctx.font = 'bold 28px sans-serif';
+  ctx.fillStyle = 'white';
+  ctx.fillText('Choose World', CANVAS_W / 2, 50);
+
+  const cols = 2;
+  const cardW = 160;
+  const cardH = 180;
+  const gapX = 20;
+  const gapY = 20;
+  const startX = (CANVAS_W - (cols * cardW + (cols - 1) * gapX)) / 2;
+  const startY = 80;
+
+  for (let i = 0; i < WORLDS.length; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const cx = startX + col * (cardW + gapX);
+    const cy = startY + row * (cardH + gapY);
+    const world = WORLDS[i];
+
+    ctx.fillStyle = i === currentWorld ? 'rgba(80,120,180,0.8)' : 'rgba(40,40,60,0.8)';
+    ctx.beginPath();
+    ctx.roundRect(cx, cy, cardW, cardH, 8);
+    ctx.fill();
+    if (i === currentWorld) {
+      ctx.strokeStyle = '#88BBFF';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Sky preview
+    const prevX = cx + 10;
+    const prevY = cy + 10;
+    const prevW = cardW - 20;
+    const prevH = 110;
+    const grad = ctx.createLinearGradient(prevX, prevY, prevX, prevY + prevH);
+    for (const s of world.sky) {
+      grad.addColorStop(s.stop, s.color);
+    }
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(prevX, prevY, prevW, prevH, 4);
+    ctx.fill();
+
+    // Ground strip
+    const gndH = 15;
+    ctx.fillStyle = world.groundTop;
+    ctx.fillRect(prevX, prevY + prevH - gndH, prevW, gndH);
+
+    // Mini mountains
+    ctx.fillStyle = world.nearMtn.color;
+    ctx.beginPath();
+    ctx.moveTo(prevX, prevY + prevH - gndH);
+    ctx.lineTo(prevX + prevW * 0.2, prevY + prevH - gndH - 30);
+    ctx.lineTo(prevX + prevW * 0.4, prevY + prevH - gndH - 15);
+    ctx.lineTo(prevX + prevW * 0.6, prevY + prevH - gndH - 35);
+    ctx.lineTo(prevX + prevW * 0.8, prevY + prevH - gndH - 20);
+    ctx.lineTo(prevX + prevW, prevY + prevH - gndH);
+    ctx.closePath();
+    ctx.fill();
+
+    // Moon stars
+    if (world.special === 'moon') {
+      for (let s = 0; s < 15; s++) {
+        const sx = prevX + (s * 9.7) % prevW;
+        const sy = prevY + (s * 7.3) % (prevH * 0.5);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.fill();
+      }
+    }
+
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = i === currentWorld ? '#FFFFFF' : '#AAAAAA';
+    ctx.fillText(world.name, cx + cardW / 2, cy + cardH - 15);
+  }
+
+  // Back button
+  const backW = 120;
+  const backH = 32;
+  const backX = (CANVAS_W - backW) / 2;
+  const backY = CANVAS_H - 60;
+  ctx.fillStyle = '#666677';
+  ctx.beginPath();
+  ctx.roundRect(backX, backY, backW, backH, 6);
+  ctx.fill();
+  ctx.font = 'bold 15px sans-serif';
+  ctx.fillStyle = 'white';
+  ctx.fillText('Back', CANVAS_W / 2, backY + 22);
+
+  ctx.restore();
+}
 
 function drawTitle() {
   ctx.save();
