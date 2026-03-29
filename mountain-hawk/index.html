@@ -73,11 +73,150 @@ let feathers = [];
 let screenFlash = 0;
 let deathAnimTimer = 0;
 let deathHawkVel = 0;
+let hawkCryTimer = 8 + Math.random() * 7;
+
+// ============================================================
+// AUDIO
+// ============================================================
+let audioCtx = null;
+let windNode = null;
+let windGain = null;
+
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  startWind();
+}
+
+function startWind() {
+  const bufferSize = audioCtx.sampleRate * 2;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+
+  windNode = audioCtx.createBufferSource();
+  windNode.buffer = buffer;
+  windNode.loop = true;
+
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 400;
+
+  windGain = audioCtx.createGain();
+  windGain.gain.value = 0.08;
+
+  windNode.connect(filter);
+  filter.connect(windGain);
+  windGain.connect(audioCtx.destination);
+  windNode.start();
+}
+
+function playFlap() {
+  if (!audioCtx) return;
+  const bufferSize = audioCtx.sampleRate * 0.1;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+  }
+
+  const source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 800;
+  filter.Q.value = 0.5;
+
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.15;
+
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  source.start();
+}
+
+function playChime() {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.value = 800;
+
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.25);
+}
+
+function playHawkCry() {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.6);
+
+  const vibrato = audioCtx.createOscillator();
+  vibrato.frequency.value = 8;
+  const vibratoGain = audioCtx.createGain();
+  vibratoGain.gain.value = 30;
+  vibrato.connect(vibratoGain);
+  vibratoGain.connect(osc.frequency);
+  vibrato.start();
+
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 800;
+  filter.Q.value = 2;
+
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.6);
+  vibrato.stop(audioCtx.currentTime + 0.6);
+}
+
+function playThud() {
+  if (!audioCtx) return;
+  const bufferSize = audioCtx.sampleRate * 0.08;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+  }
+
+  const source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 200;
+
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.3;
+
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  source.start();
+}
 
 // ============================================================
 // INPUT
 // ============================================================
 function handleFlap() {
+  initAudio();
   if (gameState === STATE_TITLE) {
     gameState = STATE_PLAYING;
     hawkY = CANVAS_H / 2;
@@ -96,6 +235,7 @@ function handleFlap() {
   if (gameState === STATE_PLAYING) {
     hawkVel = FLAP_STRENGTH;
     flapHoldTimer = 0;
+    playFlap();
   }
 
   if (gameState === STATE_GAMEOVER) {
@@ -126,6 +266,7 @@ function triggerDeath() {
   screenFlash = 0.6;
   deathAnimTimer = 0;
   deathHawkVel = -3;
+  playThud();
 
   if (score > bestScore) {
     bestScore = score;
@@ -186,6 +327,7 @@ function updatePhysics() {
     if (!p.scored && p.x + PILLAR_W < HAWK_X) {
       p.scored = true;
       score++;
+      playChime();
     }
   }
 
@@ -615,6 +757,11 @@ function gameLoop(timestamp) {
   // Update
   if (gameState === STATE_PLAYING) {
     scrollX += SCROLL_SPEED;
+    hawkCryTimer -= dt;
+    if (hawkCryTimer <= 0) {
+      playHawkCry();
+      hawkCryTimer = 8 + Math.random() * 7;
+    }
   }
   updatePhysics();
   updatePillars();
