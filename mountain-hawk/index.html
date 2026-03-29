@@ -68,6 +68,7 @@ let flapHoldTimer = 0;
 let pillars = [];
 let score = 0;
 let bestScore = parseInt(localStorage.getItem('mountainHawkBest')) || 0;
+let snowflakes = [];
 
 // ============================================================
 // INPUT
@@ -410,6 +411,43 @@ function drawPillars() {
   }
 }
 
+function initSnowflakes() {
+  snowflakes = [];
+  for (let i = 0; i < 40; i++) {
+    snowflakes.push({
+      x: Math.random() * CANVAS_W,
+      y: Math.random() * CANVAS_H,
+      r: 1 + Math.random() * 2,
+      speed: 0.3 + Math.random() * 1,
+      drift: -0.3 - Math.random() * 0.5,
+      opacity: 0.3 + Math.random() * 0.5
+    });
+  }
+}
+
+function updateSnowflakes() {
+  for (const s of snowflakes) {
+    s.y += s.speed;
+    s.x += s.drift;
+    if (s.y > CANVAS_H) {
+      s.y = -5;
+      s.x = Math.random() * CANVAS_W;
+    }
+    if (s.x < -5) {
+      s.x = CANVAS_W + 5;
+    }
+  }
+}
+
+function drawSnowflakes() {
+  for (const s of snowflakes) {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${s.opacity})`;
+    ctx.fill();
+  }
+}
+
 function drawBackground() {
   drawSky();
   drawMountainLayer(0.2, CANVAS_H - 100, 140, 8,  'rgba(160,170,185,0.7)',  'rgba(255,255,255,0.6)');
@@ -511,6 +549,7 @@ function gameLoop(timestamp) {
   }
   updatePhysics();
   updatePillars();
+  updateSnowflakes();
 
   // Title screen: hawk bobs gently
   if (gameState === STATE_TITLE) {
@@ -523,6 +562,7 @@ function gameLoop(timestamp) {
   ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
   drawBackground();
   drawPillars();
+  drawSnowflakes();
   drawHawk(HAWK_X, hawkY, hawkRotation, wingState);
 
   // UI overlays
@@ -538,6 +578,7 @@ function gameLoop(timestamp) {
   requestAnimationFrame(gameLoop);
 }
 
+initSnowflakes();
 requestAnimationFrame((t) => { lastTime = t; gameLoop(t); });
 </script>
 </body>
