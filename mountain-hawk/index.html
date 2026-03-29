@@ -350,7 +350,35 @@ function hitBtn(pos, bx, by, bw, bh) {
   return pos.x >= bx && pos.x <= bx + bw && pos.y >= by && pos.y <= by + bh;
 }
 
-function handleSkinsClick(pos) { /* Task 4 */ }
+function handleSkinsClick(pos) {
+  const cols = 2;
+  const cardW = 150;
+  const cardH = 120;
+  const gapX = 20;
+  const gapY = 15;
+  const startX = (CANVAS_W - (cols * cardW + (cols - 1) * gapX)) / 2;
+  const startY = 75;
+
+  for (let i = 0; i < SKINS.length; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const cx = startX + col * (cardW + gapX);
+    const cy = startY + row * (cardH + gapY);
+    if (hitBtn(pos, cx, cy, cardW, cardH)) {
+      currentSkin = i;
+      localStorage.setItem('mountainHawkSkin', currentSkin);
+      return;
+    }
+  }
+
+  const backW = 120;
+  const backH = 32;
+  const backX = (CANVAS_W - backW) / 2;
+  const backY = CANVAS_H - 60;
+  if (hitBtn(pos, backX, backY, backW, backH)) {
+    gameState = STATE_GAMEOVER;
+  }
+}
 function handleWorldsClick(pos) { /* Task 5 */ }
 
 function handleClick(e) {
@@ -973,7 +1001,63 @@ function drawGameOver() {
   ctx.restore();
 }
 
-function drawSkinsScreen() { /* Task 4 */ }
+function drawSkinsScreen() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  ctx.save();
+  ctx.textAlign = 'center';
+
+  ctx.font = 'bold 28px sans-serif';
+  ctx.fillStyle = 'white';
+  ctx.fillText('Choose Skin', CANVAS_W / 2, 50);
+
+  const cols = 2;
+  const cardW = 150;
+  const cardH = 120;
+  const gapX = 20;
+  const gapY = 15;
+  const startX = (CANVAS_W - (cols * cardW + (cols - 1) * gapX)) / 2;
+  const startY = 75;
+
+  for (let i = 0; i < SKINS.length; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const cx = startX + col * (cardW + gapX);
+    const cy = startY + row * (cardH + gapY);
+    const skin = getSkinColors(i, performance.now());
+
+    ctx.fillStyle = i === currentSkin ? 'rgba(80,120,180,0.8)' : 'rgba(40,40,60,0.8)';
+    ctx.beginPath();
+    ctx.roundRect(cx, cy, cardW, cardH, 8);
+    ctx.fill();
+    if (i === currentSkin) {
+      ctx.strokeStyle = '#88BBFF';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    drawHawk(cx + cardW / 2, cy + 45, 0, 1, skin);
+
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = i === currentSkin ? '#FFFFFF' : '#AAAAAA';
+    ctx.fillText(SKINS[i].name, cx + cardW / 2, cy + cardH - 10);
+  }
+
+  const backW = 120;
+  const backH = 32;
+  const backX = (CANVAS_W - backW) / 2;
+  const backY = CANVAS_H - 60;
+  ctx.fillStyle = '#666677';
+  ctx.beginPath();
+  ctx.roundRect(backX, backY, backW, backH, 6);
+  ctx.fill();
+  ctx.font = 'bold 15px sans-serif';
+  ctx.fillStyle = 'white';
+  ctx.fillText('Back', CANVAS_W / 2, backY + 22);
+
+  ctx.restore();
+}
 function drawWorldsScreen() { /* Task 5 */ }
 
 function drawTitle() {
