@@ -41,6 +41,9 @@ const CANVAS_H = 600;
 const WORLD_W = 6000;
 const WORLD_H = 800;
 const FIXED_DT = 1 / 60;
+const PLAYER_SPEED = 3;
+const SPRINT_SPEED = 5.4; // 1.8x normal
+const SPRINT_MAX = 13; // seconds
 
 // ============================================================
 // CANVAS SETUP
@@ -65,25 +68,85 @@ function updateCamera(targetX, targetY) {
 let lastTime = 0;
 let accumulator = 0;
 
-// Test position for camera
-let testX = WORLD_W / 2;
-let testY = WORLD_H / 2;
+// ============================================================
+// PLAYER
+// ============================================================
+let player = {
+  x: 300, y: 400,
+  vx: 0, vy: 0,
+  size: 1.0,
+  facingRight: true,
+  swimTimer: 0,
+  biteForce: 10,
+  maxHealth: 100,
+  health: 100,
+  coins: parseInt(localStorage.getItem('deepFeastCoins')) || 0,
+  sprinting: false,
+  staminaLeft: SPRINT_MAX,
+  alive: true
+};
 
 // ============================================================
-// INPUT (temp — will be replaced in Task 2)
+// INPUT
 // ============================================================
 const keysDown = {};
-document.addEventListener('keydown', (e) => { keysDown[e.code] = true; });
-document.addEventListener('keyup', (e) => { keysDown[e.code] = false; });
+let mouseDown = false;
+let mouseHoldTime = 0;
 
-function updateTestInput() {
-  const spd = 4;
-  if (keysDown['ArrowLeft'] || keysDown['KeyA']) testX -= spd;
-  if (keysDown['ArrowRight'] || keysDown['KeyD']) testX += spd;
-  if (keysDown['ArrowUp'] || keysDown['KeyW']) testY -= spd;
-  if (keysDown['ArrowDown'] || keysDown['KeyS']) testY += spd;
-  testX = Math.max(0, Math.min(WORLD_W, testX));
-  testY = Math.max(0, Math.min(WORLD_H, testY));
+document.addEventListener('keydown', (e) => {
+  keysDown[e.code] = true;
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+    player.sprinting = !player.sprinting;
+  }
+});
+document.addEventListener('keyup', (e) => { keysDown[e.code] = false; });
+canvas.addEventListener('mousedown', (e) => { e.preventDefault(); mouseDown = true; mouseHoldTime = 0; });
+canvas.addEventListener('mouseup', (e) => { mouseDown = false; mouseHoldTime = 0; });
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); mouseDown = true; mouseHoldTime = 0; });
+canvas.addEventListener('touchend', (e) => { mouseDown = false; mouseHoldTime = 0; });
+
+function updatePlayerInput() {
+  if (!player.alive) return;
+  const speed = player.sprinting && player.staminaLeft > 0 ? SPRINT_SPEED : PLAYER_SPEED;
+
+  player.vx = 0;
+  player.vy = 0;
+  if (keysDown['ArrowLeft'] || keysDown['KeyA']) player.vx = -speed;
+  if (keysDown['ArrowRight'] || keysDown['KeyD']) player.vx = speed;
+  if (keysDown['ArrowUp'] || keysDown['KeyW']) player.vy = -speed;
+  if (keysDown['ArrowDown'] || keysDown['KeyS']) player.vy = speed;
+
+  if (player.vx !== 0 && player.vy !== 0) {
+    player.vx *= 0.707;
+    player.vy *= 0.707;
+  }
+
+  if (player.vx > 0) player.facingRight = true;
+  if (player.vx < 0) player.facingRight = false;
+
+  if (player.sprinting && player.staminaLeft > 0) {
+    player.staminaLeft -= FIXED_DT;
+    if (player.staminaLeft <= 0) {
+      player.staminaLeft = 0;
+      player.sprinting = false;
+    }
+  } else if (!player.sprinting && player.staminaLeft < SPRINT_MAX) {
+    player.staminaLeft += FIXED_DT * 0.5;
+    if (player.staminaLeft > SPRINT_MAX) player.staminaLeft = SPRINT_MAX;
+  }
+
+  if (mouseDown) {
+    mouseHoldTime += FIXED_DT;
+  }
+}
+
+function updatePlayer() {
+  if (!player.alive) return;
+  player.x += player.vx;
+  player.y += player.vy;
+  player.x = Math.max(20 * player.size, Math.min(WORLD_W - 20 * player.size, player.x));
+  player.y = Math.max(20 * player.size, Math.min(WORLD_H - 60 - 12 * player.size, player.y));
+  player.swimTimer += FIXED_DT;
 }
 
 // ============================================================
@@ -143,6 +206,71 @@ function drawOceanFloor() {
   }
 }
 
+function drawPiranha(x, y, size, facingRight, swimTimer, skin, biting, biteCharged, canHit) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(facingRight ? 1 : -1, 1);
+  const s = size;
+
+  // Tail (wags with swimTimer)
+  const tailWag = Math.sin(swimTimer * 8) * 0.3;
+  ctx.fillStyle = skin === 'skeleton' ? '#D0C8B8' : '#CC3300';
+  ctx.beginPath();
+  ctx.moveTo(-18 * s, 0);
+  ctx.lineTo(-28 * s, (-10 + tailWag * 10) * s);
+  ctx.lineTo(-28 * s, (10 + tailWag * 10) * s);
+  ctx.closePath();
+  ctx.fill();
+
+  // Body
+  ctx.fillStyle = skin === 'skeleton' ? '#E8E0D0' : '#FF4400';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 20 * s, 12 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Belly
+  ctx.fillStyle = skin === 'skeleton' ? '#F0E8D8' : '#FF8844';
+  ctx.beginPath();
+  ctx.ellipse(2 * s, 4 * s, 14 * s, 6 * s, 0, 0, Math.PI);
+  ctx.fill();
+
+  if (skin === 'skeleton') {
+    ctx.strokeStyle = '#B0A898';
+    ctx.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * 5 * s, -6 * s);
+      ctx.lineTo(i * 5 * s, 6 * s);
+      ctx.stroke();
+    }
+  }
+
+  // Dorsal fin
+  ctx.fillStyle = skin === 'skeleton' ? '#C8C0B0' : '#CC2200';
+  ctx.beginPath();
+  ctx.moveTo(-4 * s, -10 * s);
+  ctx.lineTo(6 * s, -14 * s);
+  ctx.lineTo(8 * s, -10 * s);
+  ctx.closePath();
+  ctx.fill();
+
+  // Eye
+  ctx.beginPath();
+  ctx.arc(10 * s, -3 * s, 3.5 * s, 0, Math.PI * 2);
+  ctx.fillStyle = 'white';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(11 * s, -3 * s, 1.8 * s, 0, Math.PI * 2);
+  ctx.fillStyle = '#111';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(11.5 * s, -3.5 * s, 0.6 * s, 0, Math.PI * 2);
+  ctx.fillStyle = 'white';
+  ctx.fill();
+
+  ctx.restore();
+}
+
 // ============================================================
 // GAME LOOP
 // ============================================================
@@ -153,8 +281,9 @@ function gameLoop(timestamp) {
 
   while (accumulator >= FIXED_DT) {
     accumulator -= FIXED_DT;
-    updateTestInput();
-    updateCamera(testX, testY);
+    updatePlayerInput();
+    updatePlayer();
+    updateCamera(player.x, player.y);
   }
 
   // Draw
@@ -162,11 +291,7 @@ function gameLoop(timestamp) {
   drawOceanBackground();
   drawOceanFloor();
 
-  // Draw test marker
-  ctx.fillStyle = 'red';
-  ctx.beginPath();
-  ctx.arc(testX - camX, testY - camY, 10, 0, Math.PI * 2);
-  ctx.fill();
+  drawPiranha(player.x - camX, player.y - camY, player.size, player.facingRight, player.swimTimer, 'normal', false, false, false);
 
   requestAnimationFrame(gameLoop);
 }
