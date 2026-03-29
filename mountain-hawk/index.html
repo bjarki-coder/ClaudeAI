@@ -1295,28 +1295,36 @@ function drawScreenFlash() {
 // ============================================================
 // GAME LOOP
 // ============================================================
+const FIXED_DT = 1 / 60;
+let accumulator = 0;
+
 function gameLoop(timestamp) {
   const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
   lastTime = timestamp;
+  accumulator += dt;
 
-  // Update
-  if (gameState === STATE_PLAYING) {
-    scrollX += SCROLL_SPEED;
-    hawkCryTimer -= dt;
-    if (hawkCryTimer <= 0) {
-      playHawkCry();
-      hawkCryTimer = 8 + Math.random() * 7;
+  // Fixed timestep: run physics at 60fps regardless of display refresh rate
+  while (accumulator >= FIXED_DT) {
+    accumulator -= FIXED_DT;
+
+    if (gameState === STATE_PLAYING) {
+      scrollX += SCROLL_SPEED;
+      hawkCryTimer -= FIXED_DT;
+      if (hawkCryTimer <= 0) {
+        playHawkCry();
+        hawkCryTimer = 8 + Math.random() * 7;
+      }
+    } else {
+      scrollX += SCROLL_SPEED * 0.3;
     }
-  } else {
-    scrollX += SCROLL_SPEED * 0.3;
+    if (gameState === STATE_GAMEOVER) {
+      gameOverClickDelay -= FIXED_DT;
+    }
+    updatePhysics();
+    updatePillars();
+    updateDeathEffects(FIXED_DT);
+    updateParticles();
   }
-  if (gameState === STATE_GAMEOVER) {
-    gameOverClickDelay -= dt;
-  }
-  updatePhysics();
-  updatePillars();
-  updateDeathEffects(dt);
-  updateParticles();
 
   // Title screen: hawk bobs gently
   if (gameState === STATE_TITLE) {
