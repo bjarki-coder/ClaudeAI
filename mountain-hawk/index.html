@@ -178,6 +178,8 @@ let wingTimer = 0;
 const STATE_TITLE = 0;
 const STATE_PLAYING = 1;
 const STATE_GAMEOVER = 2;
+const STATE_SKINS = 3;
+const STATE_WORLDS = 4;
 let gameState = STATE_TITLE;
 let flapHoldTimer = 0;
 let pillars = [];
@@ -334,8 +336,28 @@ function playThud() {
 // ============================================================
 // INPUT
 // ============================================================
-function handleFlap() {
+function getClickPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = CANVAS_W / rect.width;
+  const scaleY = CANVAS_H / rect.height;
+  if (e.touches) {
+    return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
+  }
+  return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+}
+
+function hitBtn(pos, bx, by, bw, bh) {
+  return pos.x >= bx && pos.x <= bx + bw && pos.y >= by && pos.y <= by + bh;
+}
+
+function handleSkinsClick(pos) { /* Task 4 */ }
+function handleWorldsClick(pos) { /* Task 5 */ }
+
+function handleClick(e) {
+  e.preventDefault();
   initAudio();
+  const pos = getClickPos(e);
+
   if (gameState === STATE_TITLE) {
     gameState = STATE_PLAYING;
     hawkY = CANVAS_H / 2;
@@ -354,16 +376,47 @@ function handleFlap() {
         scored: false
       });
     }
+    hawkVel = FLAP_STRENGTH;
+    flapHoldTimer = 0;
+    playFlap();
+    return;
   }
 
   if (gameState === STATE_PLAYING) {
     hawkVel = FLAP_STRENGTH;
     flapHoldTimer = 0;
     playFlap();
+    return;
   }
 
-  if (gameState === STATE_GAMEOVER && gameOverClickDelay <= 0) {
-    resetGame();
+  if (gameState === STATE_GAMEOVER && deathAnimTimer > 1.0 && gameOverClickDelay <= 0) {
+    const panelW = 260;
+    const panelH = 250;
+    const panelY = (CANVAS_H - panelH) / 2 - 20;
+    const btnW = 180;
+    const btnH = 32;
+    const btnX = (CANVAS_W - btnW) / 2;
+    const btnStartY = panelY + 130;
+    const btnGap = 38;
+
+    if (hitBtn(pos, btnX, btnStartY, btnW, btnH)) {
+      resetGame();
+    } else if (hitBtn(pos, btnX, btnStartY + btnGap, btnW, btnH)) {
+      gameState = STATE_SKINS;
+    } else if (hitBtn(pos, btnX, btnStartY + btnGap * 2, btnW, btnH)) {
+      gameState = STATE_WORLDS;
+    }
+    return;
+  }
+
+  if (gameState === STATE_SKINS) {
+    handleSkinsClick(pos);
+    return;
+  }
+
+  if (gameState === STATE_WORLDS) {
+    handleWorldsClick(pos);
+    return;
   }
 }
 
@@ -373,13 +426,24 @@ function resetGame() {
   hawkRotation = 0;
   scrollX = 0;
   pillars = [];
+  initParticles();
   gameState = STATE_TITLE;
 }
 
-canvas.addEventListener('mousedown', (e) => { e.preventDefault(); handleFlap(); });
-canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleFlap(); });
+canvas.addEventListener('mousedown', handleClick);
+canvas.addEventListener('touchstart', handleClick);
 document.addEventListener('keydown', (e) => {
-  if (e.code === 'Space') { e.preventDefault(); handleFlap(); }
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (gameState === STATE_PLAYING) {
+      initAudio();
+      hawkVel = FLAP_STRENGTH;
+      flapHoldTimer = 0;
+      playFlap();
+    } else if (gameState === STATE_TITLE) {
+      handleClick({preventDefault:()=>{}, clientX:0, clientY:0, target:canvas});
+    }
+  }
 });
 
 // ============================================================
@@ -853,10 +917,10 @@ function drawGameOver() {
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-  const panelW = 220;
-  const panelH = 160;
+  const panelW = 260;
+  const panelH = 250;
   const panelX = (CANVAS_W - panelW) / 2;
-  const panelY = (CANVAS_H - panelH) / 2 - 30;
+  const panelY = (CANVAS_H - panelH) / 2 - 20;
 
   ctx.fillStyle = 'rgba(30,30,50,0.9)';
   ctx.beginPath();
@@ -873,24 +937,44 @@ function drawGameOver() {
   ctx.fillStyle = '#CC4444';
   ctx.fillText('Game Over', CANVAS_W / 2, panelY + 35);
 
-  ctx.font = '16px sans-serif';
+  ctx.font = '14px sans-serif';
   ctx.fillStyle = '#AAAAAA';
-  ctx.fillText('Score', CANVAS_W / 2, panelY + 65);
-
-  ctx.font = 'bold 36px sans-serif';
+  ctx.fillText('Score', CANVAS_W / 2, panelY + 60);
+  ctx.font = 'bold 32px sans-serif';
   ctx.fillStyle = 'white';
-  ctx.fillText(score, CANVAS_W / 2, panelY + 100);
-
-  ctx.font = '14px sans-serif';
+  ctx.fillText(score, CANVAS_W / 2, panelY + 92);
+  ctx.font = '13px sans-serif';
   ctx.fillStyle = '#88AACC';
-  ctx.fillText('Best: ' + bestScore, CANVAS_W / 2, panelY + 125);
+  ctx.fillText('Best: ' + bestScore, CANVAS_W / 2, panelY + 112);
 
-  ctx.font = '14px sans-serif';
-  ctx.fillStyle = '#888888';
-  ctx.fillText('Click to Retry', CANVAS_W / 2, panelY + panelH + 30);
+  const btnW = 180;
+  const btnH = 32;
+  const btnX = (CANVAS_W - btnW) / 2;
+  const btnStartY = panelY + 130;
+  const btnGap = 38;
+
+  const buttons = [
+    {label: 'Retry', color: '#44AA44'},
+    {label: 'Skins', color: '#AA8844'},
+    {label: 'Worlds', color: '#4488CC'}
+  ];
+
+  for (let i = 0; i < buttons.length; i++) {
+    const by = btnStartY + i * btnGap;
+    ctx.fillStyle = buttons[i].color;
+    ctx.beginPath();
+    ctx.roundRect(btnX, by, btnW, btnH, 6);
+    ctx.fill();
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillStyle = 'white';
+    ctx.fillText(buttons[i].label, CANVAS_W / 2, by + 22);
+  }
 
   ctx.restore();
 }
+
+function drawSkinsScreen() { /* Task 4 */ }
+function drawWorldsScreen() { /* Task 5 */ }
 
 function drawTitle() {
   ctx.save();
@@ -1013,6 +1097,10 @@ function gameLoop(timestamp) {
     if (deathAnimTimer > 1.0) {
       drawGameOver();
     }
+  } else if (gameState === STATE_SKINS) {
+    drawSkinsScreen();
+  } else if (gameState === STATE_WORLDS) {
+    drawWorldsScreen();
   }
 
   requestAnimationFrame(gameLoop);
