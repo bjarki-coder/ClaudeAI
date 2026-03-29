@@ -1,4 +1,5 @@
 # Open Questions
 
-- What is the project about? Need to define goals with son.
-- What tech stack will be used?
+- What other 2D browser games to build next?
+- Should games share a common launcher/menu page?
+- Any new skins, worlds, or features for Mountain Hawk?
