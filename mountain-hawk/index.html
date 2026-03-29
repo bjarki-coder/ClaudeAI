@@ -69,6 +69,10 @@ let pillars = [];
 let score = 0;
 let bestScore = parseInt(localStorage.getItem('mountainHawkBest')) || 0;
 let snowflakes = [];
+let feathers = [];
+let screenFlash = 0;
+let deathAnimTimer = 0;
+let deathHawkVel = 0;
 
 // ============================================================
 // INPUT
@@ -117,6 +121,31 @@ document.addEventListener('keydown', (e) => {
 // ============================================================
 // PHYSICS
 // ============================================================
+function triggerDeath() {
+  gameState = STATE_GAMEOVER;
+  screenFlash = 0.6;
+  deathAnimTimer = 0;
+  deathHawkVel = -3;
+
+  if (score > bestScore) {
+    bestScore = score;
+    localStorage.setItem('mountainHawkBest', bestScore);
+  }
+
+  feathers = [];
+  for (let i = 0; i < 10; i++) {
+    feathers.push({
+      x: HAWK_X,
+      y: hawkY,
+      vx: (Math.random() - 0.5) * 6,
+      vy: -Math.random() * 5,
+      r: 1.5 + Math.random() * 2,
+      color: Math.random() > 0.5 ? '#7A4E2A' : '#DDDDDD',
+      life: 1.0
+    });
+  }
+}
+
 function updatePhysics() {
   if (gameState !== STATE_PLAYING) return;
 
@@ -149,11 +178,7 @@ function updatePhysics() {
   for (const p of pillars) {
     if (hx + hw > p.x && hx < p.x + PILLAR_W) {
       if (hy < p.topH || hy + hh > p.topH + GAP_SIZE) {
-        gameState = STATE_GAMEOVER;
-        if (score > bestScore) {
-          bestScore = score;
-          localStorage.setItem('mountainHawkBest', bestScore);
-        }
+        triggerDeath();
         return;
       }
     }
@@ -167,7 +192,7 @@ function updatePhysics() {
   // Ground collision
   if (hawkY > CANVAS_H - GROUND_H - HAWK_H / 2) {
     hawkY = CANVAS_H - GROUND_H - HAWK_H / 2;
-    gameState = STATE_GAMEOVER;
+    triggerDeath();
   }
 
   // Ceiling collision
@@ -536,6 +561,50 @@ function drawTitle() {
   ctx.restore();
 }
 
+function updateDeathEffects(dt) {
+  if (gameState !== STATE_GAMEOVER) return;
+
+  if (screenFlash > 0) {
+    screenFlash -= dt * 4;
+    if (screenFlash < 0) screenFlash = 0;
+  }
+
+  for (const f of feathers) {
+    f.x += f.vx;
+    f.y += f.vy;
+    f.vy += 0.2;
+    f.life -= dt * 1.2;
+  }
+  feathers = feathers.filter(f => f.life > 0);
+
+  deathAnimTimer += dt;
+  deathHawkVel += 0.3;
+  hawkY += deathHawkVel;
+  hawkRotation += 0.1;
+  if (hawkY > CANVAS_H - GROUND_H - HAWK_H / 2) {
+    hawkY = CANVAS_H - GROUND_H - HAWK_H / 2;
+    deathHawkVel = 0;
+  }
+}
+
+function drawFeathers() {
+  for (const f of feathers) {
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+    ctx.fillStyle = f.color;
+    ctx.globalAlpha = Math.max(0, f.life);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawScreenFlash() {
+  if (screenFlash > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${screenFlash})`;
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  }
+}
+
 // ============================================================
 // GAME LOOP
 // ============================================================
@@ -549,6 +618,7 @@ function gameLoop(timestamp) {
   }
   updatePhysics();
   updatePillars();
+  updateDeathEffects(dt);
   updateSnowflakes();
 
   // Title screen: hawk bobs gently
@@ -564,6 +634,8 @@ function gameLoop(timestamp) {
   drawPillars();
   drawSnowflakes();
   drawHawk(HAWK_X, hawkY, hawkRotation, wingState);
+  drawFeathers();
+  drawScreenFlash();
 
   // UI overlays
   if (gameState === STATE_TITLE) {
@@ -572,7 +644,9 @@ function gameLoop(timestamp) {
     drawScore();
   } else if (gameState === STATE_GAMEOVER) {
     drawScore();
-    drawGameOver();
+    if (deathAnimTimer > 1.0) {
+      drawGameOver();
+    }
   }
 
   requestAnimationFrame(gameLoop);
