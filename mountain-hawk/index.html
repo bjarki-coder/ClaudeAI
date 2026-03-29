@@ -152,9 +152,9 @@ const WORLDS = [
   {
     name: 'Moon',
     sky: [{stop:0,color:'#0A0A1A'},{stop:0.5,color:'#101028'},{stop:1,color:'#1A1A3A'}],
-    farMtn: {color:'rgba(60,60,70,0.7)', snow:null},
-    nearMtn: {color:'rgba(80,80,90,0.8)', snow:null},
-    tree1: '#555566', tree2: '#666677', treeShape: 'rock',
+    farMtn: {color:'rgba(0,0,0,0)', snow:null},
+    nearMtn: {color:'rgba(0,0,0,0)', snow:null},
+    tree1: '#555566', tree2: '#666677', treeShape: 'crater',
     groundTop: '#3A3A3A', groundBot: '#555555',
     pillarDark: '#3A3A4A', pillarLight: '#5A5A6A', pillarCap: 'rgba(100,100,110,0.6)',
     particleColor: '200,200,210', particleMinO: 0.2, particleMaxO: 0.5,
@@ -649,6 +649,22 @@ function drawSky() {
     ctx.arc(348, 65, 5, 0, Math.PI * 2);
     ctx.fillStyle = '#33AA55';
     ctx.fill();
+
+    // Sun (top-left, bright glow)
+    const sunX = 80, sunY = 70, sunR = 28;
+    const sunGlow = ctx.createRadialGradient(sunX, sunY, sunR * 0.3, sunX, sunY, sunR * 2.5);
+    sunGlow.addColorStop(0, 'rgba(255,255,200,0.3)');
+    sunGlow.addColorStop(1, 'rgba(255,255,200,0)');
+    ctx.fillStyle = sunGlow;
+    ctx.fillRect(sunX - sunR * 3, sunY - sunR * 3, sunR * 6, sunR * 6);
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFEE88';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, sunR * 0.7, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFFFCC';
+    ctx.fill();
   }
 }
 
@@ -751,6 +767,17 @@ function drawWorldTrees(scrollFactor) {
         ctx.lineTo(tx + w * 0.5, treeBaseY - treeH * 0.6);
         ctx.lineTo(tx + w, treeBaseY);
         ctx.closePath();
+        ctx.fill();
+      } else if (world.treeShape === 'crater') {
+        const craterR = 4 + (i % 3) * 3;
+        const cy = treeBaseY + 10 + (i % 4) * 8;
+        ctx.beginPath();
+        ctx.ellipse(tx, cy, craterR + 2, craterR * 0.4 + 1, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#4A4A4A';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(tx, cy, craterR, craterR * 0.35, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#252525';
         ctx.fill();
       }
     }
