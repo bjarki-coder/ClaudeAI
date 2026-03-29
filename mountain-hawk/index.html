@@ -1208,11 +1208,15 @@ function drawTitle() {
     ctx.fillText('Best: ' + bestScore, CANVAS_W / 2, CANVAS_H - 70);
   }
 
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#777777';
+  ctx.fillText(SKINS[currentSkin].name + ' \u00B7 ' + WORLDS[currentWorld].name, CANVAS_W / 2, CANVAS_H - 45);
+
   ctx.restore();
 }
 
 function updateDeathEffects(dt) {
-  if (gameState !== STATE_GAMEOVER) return;
+  if (gameState !== STATE_GAMEOVER && gameState !== STATE_SKINS && gameState !== STATE_WORLDS) return;
 
   if (screenFlash > 0) {
     screenFlash -= dt * 4;
