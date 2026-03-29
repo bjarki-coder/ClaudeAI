@@ -127,11 +127,25 @@ Accessible from the death screen (like Mountain Hawk's menu). Coins persist betw
 - Swim in random patterns
 - Flee when player gets close (if player is bigger)
 - Attack if player is smaller
+- Can fight other fish — bigger fish eat smaller ones, dropping meat
 
 ### Medium Fish
 - Faster, more evasive
 - Will chase and bite the player if player is smaller
 - Flee if player is significantly bigger
+- Fight other fish their size or smaller — loser drops meat you can steal
+
+### Fish-vs-Fish Combat
+All AI fish can fight each other. If a bigger fish gets close to a smaller one, it attacks. The smaller fish dies and drops meat. The winning fish may eat the meat or move on — if it moves on, you can steal the dropped meat. This makes the world feel alive and gives you opportunities to scavenge.
+
+### Bite Latch
+When you land a bite on an enemy, your fish latches onto them. While latched:
+- You move with the enemy (attached to them)
+- You deal continuous damage based on your bite force
+- The enemy thrashes around trying to shake you off
+- Press left click again or wait ~2 seconds to release
+- Taking damage from another source forces you to release
+- This is the primary way to fight large enemies — latch on and chew
 
 ### Orcas (5 on map)
 - Patrol set routes
