@@ -32,6 +32,8 @@ const SCROLL_SPEED = 2;
 const GROUND_H = 60;
 const PILLAR_W = 60;
 const GAP_SIZE = 130;
+const GAP_SHRINK = 1.5;  // gap shrinks by this many px per pillar passed
+const GAP_MIN = 70;      // minimum gap so it's still possible
 const PILLAR_SPACING = 220;
 const PILLAR_MIN_TOP = 80;
 const PILLAR_MAX_TOP = CANVAS_H - GROUND_H - GAP_SIZE - 80;
@@ -67,6 +69,7 @@ let gameState = STATE_TITLE;
 let flapHoldTimer = 0;
 let pillars = [];
 let score = 0;
+let currentGap = GAP_SIZE;
 let bestScore = parseInt(localStorage.getItem('mountainHawkBest')) || 0;
 let snowflakes = [];
 let feathers = [];
@@ -223,12 +226,16 @@ function handleFlap() {
     hawkY = CANVAS_H / 2;
     hawkVel = 0;
     score = 0;
+    currentGap = GAP_SIZE;
     pillars = [];
     hawkCryTimer = 8 + Math.random() * 7;
     for (let i = 0; i < 4; i++) {
+      const gap = currentGap;
+      const maxTop = CANVAS_H - GROUND_H - gap - 80;
       pillars.push({
         x: CANVAS_W + i * PILLAR_SPACING,
-        topH: PILLAR_MIN_TOP + Math.random() * (PILLAR_MAX_TOP - PILLAR_MIN_TOP),
+        topH: PILLAR_MIN_TOP + Math.random() * (maxTop - PILLAR_MIN_TOP),
+        gap: gap,
         scored: false
       });
     }
@@ -321,7 +328,7 @@ function updatePhysics() {
 
   for (const p of pillars) {
     if (hx + hw > p.x && hx < p.x + PILLAR_W) {
-      if (hy < p.topH || hy + hh > p.topH + GAP_SIZE) {
+      if (hy < p.topH || hy + hh > p.topH + p.gap) {
         triggerDeath();
         return;
       }
@@ -330,6 +337,7 @@ function updatePhysics() {
     if (!p.scored && p.x + PILLAR_W < HAWK_X) {
       p.scored = true;
       score++;
+      currentGap = Math.max(GAP_MIN, currentGap - GAP_SHRINK);
       playChime();
     }
   }
@@ -357,9 +365,12 @@ function updatePillars() {
   if (pillars.length > 0 && pillars[0].x < -PILLAR_W) {
     pillars.shift();
     const lastX = pillars[pillars.length - 1].x;
+    const gap = currentGap;
+    const maxTop = CANVAS_H - GROUND_H - gap - 80;
     pillars.push({
       x: lastX + PILLAR_SPACING,
-      topH: PILLAR_MIN_TOP + Math.random() * (PILLAR_MAX_TOP - PILLAR_MIN_TOP),
+      topH: PILLAR_MIN_TOP + Math.random() * (maxTop - PILLAR_MIN_TOP),
+      gap: gap,
       scored: false
     });
   }
@@ -573,8 +584,8 @@ function drawHawk(x, y, rotation, wing) {
   ctx.restore();
 }
 
-function drawPillar(x, topH) {
-  const bottomY = topH + GAP_SIZE;
+function drawPillar(x, topH, gap) {
+  const bottomY = topH + gap;
   const bottomH = CANVAS_H - GROUND_H - bottomY;
 
   // Top pillar
@@ -613,7 +624,7 @@ function drawPillar(x, topH) {
 
 function drawPillars() {
   for (const p of pillars) {
-    drawPillar(p.x, p.topH);
+    drawPillar(p.x, p.topH, p.gap);
   }
 }
 
