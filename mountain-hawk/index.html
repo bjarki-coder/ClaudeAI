@@ -467,71 +467,107 @@ function drawHawk(x, y, rotation, wing) {
   ctx.translate(x, y);
   ctx.rotate(rotation);
 
-  // Body
+  // Tail feathers
+  ctx.fillStyle = '#4A2E14';
   ctx.beginPath();
-  ctx.ellipse(0, 0, 18, 8, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#5C3A1E';
+  ctx.moveTo(-14, -2);
+  ctx.lineTo(-24, -6);
+  ctx.lineTo(-22, 0);
+  ctx.lineTo(-26, 4);
+  ctx.lineTo(-14, 2);
+  ctx.closePath();
   ctx.fill();
 
-  // Wings based on state
-  ctx.fillStyle = '#7A4E2A';
+  // Body — round like Flappy Bird
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 16, 14, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#6B3D1F';
+  ctx.fill();
+
+  // Belly (lighter patch — Flappy Bird style)
+  ctx.beginPath();
+  ctx.ellipse(3, 5, 10, 8, 0, Math.PI, Math.PI * 2);
+  ctx.fillStyle = '#D4A96A';
+  ctx.fill();
+
+  // Chest/breast lighter area
+  ctx.beginPath();
+  ctx.ellipse(6, 0, 8, 10, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#8B5A2B';
+  ctx.fill();
+
+  // Wing — single wing like Flappy Bird (side view)
+  ctx.fillStyle = '#5C3A1E';
   ctx.beginPath();
   if (wing === 0) {
-    // Wings up
-    ctx.moveTo(-8, -3);
-    ctx.quadraticCurveTo(-18, -18, -24, -14);
-    ctx.quadraticCurveTo(-16, -6, -8, -3);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(8, -3);
-    ctx.quadraticCurveTo(18, -18, 24, -14);
-    ctx.quadraticCurveTo(16, -6, 8, -3);
+    // Wing up
+    ctx.moveTo(-4, -4);
+    ctx.quadraticCurveTo(-14, -22, -8, -24);
+    ctx.quadraticCurveTo(-2, -18, 2, -10);
+    ctx.quadraticCurveTo(0, -6, -4, -4);
   } else if (wing === 1) {
-    // Wings level
-    ctx.moveTo(-8, 0);
-    ctx.quadraticCurveTo(-18, -4, -26, -1);
-    ctx.quadraticCurveTo(-18, 2, -8, 0);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(8, 0);
-    ctx.quadraticCurveTo(18, -4, 26, -1);
-    ctx.quadraticCurveTo(18, 2, 8, 0);
+    // Wing level
+    ctx.moveTo(-4, -2);
+    ctx.quadraticCurveTo(-18, -6, -20, -2);
+    ctx.quadraticCurveTo(-18, 2, -4, 2);
+    ctx.quadraticCurveTo(-2, 0, -4, -2);
   } else {
-    // Wings down
-    ctx.moveTo(-8, 3);
-    ctx.quadraticCurveTo(-18, 14, -22, 16);
-    ctx.quadraticCurveTo(-16, 8, -8, 3);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(8, 3);
-    ctx.quadraticCurveTo(18, 14, 22, 16);
-    ctx.quadraticCurveTo(16, 8, 8, 3);
+    // Wing down
+    ctx.moveTo(-4, 2);
+    ctx.quadraticCurveTo(-14, 16, -6, 20);
+    ctx.quadraticCurveTo(0, 14, 2, 8);
+    ctx.quadraticCurveTo(0, 4, -4, 2);
   }
   ctx.fill();
+  // Wing feather detail
+  ctx.strokeStyle = '#4A2E14';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
 
-  // Head
+  // White eye patch (like a real hawk)
   ctx.beginPath();
-  ctx.ellipse(14, -2, 7, 6, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#4A2E14';
+  ctx.ellipse(10, -4, 6, 5.5, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#F5F0E0';
   ctx.fill();
 
-  // Beak
+  // Eye — big like Flappy Bird
   ctx.beginPath();
-  ctx.moveTo(20, -3);
-  ctx.lineTo(27, -1);
-  ctx.lineTo(20, 1);
+  ctx.arc(11, -4, 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#E8A000';
+  ctx.fill();
+  // Pupil
+  ctx.beginPath();
+  ctx.arc(12, -4, 2, 0, Math.PI * 2);
+  ctx.fillStyle = '#111';
+  ctx.fill();
+  // Eye shine
+  ctx.beginPath();
+  ctx.arc(12.8, -5.2, 0.8, 0, Math.PI * 2);
+  ctx.fillStyle = 'white';
+  ctx.fill();
+
+  // Dark hawk eyebrow stripe (realistic detail)
+  ctx.beginPath();
+  ctx.moveTo(6, -8);
+  ctx.quadraticCurveTo(10, -10, 15, -8);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#2A1A0A';
+  ctx.stroke();
+
+  // Beak — hooked like a hawk, orange like Flappy Bird
+  ctx.beginPath();
+  ctx.moveTo(15, -3);
+  ctx.quadraticCurveTo(22, -2, 21, 1);
+  ctx.quadraticCurveTo(19, 3, 16, 1);
   ctx.closePath();
-  ctx.fillStyle = '#DAA520';
+  ctx.fillStyle = '#E8901A';
   ctx.fill();
-
-  // Eye
+  // Beak hook tip
   ctx.beginPath();
-  ctx.arc(16, -4, 1.8, 0, Math.PI * 2);
-  ctx.fillStyle = '#FFD700';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(16, -4, 0.8, 0, Math.PI * 2);
-  ctx.fillStyle = 'black';
+  ctx.moveTo(21, 1);
+  ctx.quadraticCurveTo(22, 2, 20, 3);
+  ctx.quadraticCurveTo(19, 3, 19, 2);
+  ctx.fillStyle = '#C07010';
   ctx.fill();
 
   ctx.restore();
