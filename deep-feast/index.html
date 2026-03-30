@@ -707,31 +707,31 @@ function drawPiranha(x, y, size, facingRight, swimTimer, skin, biting, biteCharg
 
     // Teeth on the upper arc (pointing inward/down)
     ctx.fillStyle = teethColor;
-    for (let t = 0; t < 6; t++) {
-      const angle = -0.7 + t * 0.12;
+    for (let t = 0; t < 5; t++) {
+      const angle = -0.7 + t * 0.16;
       const bx = cx + Math.cos(angle) * r;
       const by = cy + Math.sin(angle) * r;
-      const inX = cx + Math.cos(angle) * (r - 5 * s);
-      const inY = cy + Math.sin(angle) * (r - 5 * s);
+      const inX = cx + Math.cos(angle) * (r - 8 * s);
+      const inY = cy + Math.sin(angle) * (r - 8 * s);
       ctx.beginPath();
-      ctx.moveTo(bx - Math.sin(angle) * 1.2 * s, by + Math.cos(angle) * 1.2 * s);
+      ctx.moveTo(bx - Math.sin(angle) * 2 * s, by + Math.cos(angle) * 2 * s);
       ctx.lineTo(inX, inY);
-      ctx.lineTo(bx + Math.sin(angle) * 1.2 * s, by - Math.cos(angle) * 1.2 * s);
+      ctx.lineTo(bx + Math.sin(angle) * 2 * s, by - Math.cos(angle) * 2 * s);
       ctx.closePath();
       ctx.fill();
     }
 
     // Teeth on the lower arc (pointing inward/up)
-    for (let t = 0; t < 6; t++) {
-      const angle = 0.1 + t * 0.12;
+    for (let t = 0; t < 5; t++) {
+      const angle = 0.08 + t * 0.16;
       const bx = cx + Math.cos(angle) * r;
       const by = cy + Math.sin(angle) * r;
-      const inX = cx + Math.cos(angle) * (r - 5 * s);
-      const inY = cy + Math.sin(angle) * (r - 5 * s);
+      const inX = cx + Math.cos(angle) * (r - 8 * s);
+      const inY = cy + Math.sin(angle) * (r - 8 * s);
       ctx.beginPath();
-      ctx.moveTo(bx - Math.sin(angle) * 1.2 * s, by + Math.cos(angle) * 1.2 * s);
+      ctx.moveTo(bx - Math.sin(angle) * 2 * s, by + Math.cos(angle) * 2 * s);
       ctx.lineTo(inX, inY);
-      ctx.lineTo(bx + Math.sin(angle) * 1.2 * s, by - Math.cos(angle) * 1.2 * s);
+      ctx.lineTo(bx + Math.sin(angle) * 2 * s, by - Math.cos(angle) * 2 * s);
       ctx.closePath();
       ctx.fill();
     }
