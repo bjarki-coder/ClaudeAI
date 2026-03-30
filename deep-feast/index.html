@@ -75,6 +75,8 @@ let gameState = STATE_PLAYING;
 let coinsThisRun = 0;
 let lastTime = 0;
 let accumulator = 0;
+let gameStarted = false;
+let replenishCounter = 0;
 
 // ============================================================
 // PLAYER
@@ -101,6 +103,36 @@ let player = {
 // ENTITIES
 // ============================================================
 let entities = [];
+
+// ============================================================
+// RESPAWN QUEUE
+// ============================================================
+let respawnQueue = [];
+
+function queueRespawn(entity) {
+  if (entity.respawnTime) {
+    respawnQueue.push({
+      type: entity.type,
+      x: entity.respawnX,
+      y: entity.respawnY,
+      timer: entity.respawnTime
+    });
+  }
+}
+
+function updateRespawns() {
+  for (let i = respawnQueue.length - 1; i >= 0; i--) {
+    respawnQueue[i].timer -= FIXED_DT;
+    if (respawnQueue[i].timer <= 0) {
+      const r = respawnQueue[i];
+      if (r.type === 'orca') spawnOrca(r.x, r.y);
+      else if (r.type === 'whale') spawnWhale(r.x, r.y);
+      else if (r.type === 'megalodon') spawnMegalodon(r.x, r.y);
+      else if (r.type === 'mosasaurus') spawnMosasaurus(r.x, r.y);
+      respawnQueue.splice(i, 1);
+    }
+  }
+}
 
 // ============================================================
 // FAMILY
@@ -356,6 +388,11 @@ let mouseDown = false;
 let mouseHoldTime = 0;
 
 document.addEventListener('keydown', (e) => {
+  if (!gameStarted) {
+    gameStarted = true;
+    initAudio();
+    return;
+  }
   initAudio();
   keysDown[e.code] = true;
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
@@ -368,6 +405,11 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => { keysDown[e.code] = false; });
 canvas.addEventListener('mousedown', (e) => {
   e.preventDefault();
+  if (!gameStarted) {
+    gameStarted = true;
+    initAudio();
+    return;
+  }
   initAudio();
   if (gameState === STATE_SHOP) {
     const pos = getClickPos(e);
@@ -390,6 +432,11 @@ canvas.addEventListener('mousedown', (e) => {
 canvas.addEventListener('mouseup', (e) => { mouseDown = false; mouseHoldTime = 0; });
 canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
+  if (!gameStarted) {
+    gameStarted = true;
+    initAudio();
+    return;
+  }
   initAudio();
   if (gameState === STATE_SHOP) {
     const pos = getClickPos(e);
@@ -953,6 +1000,20 @@ function drawMosasaurus(x, y, s, vx, swimTimer) {
   ctx.restore();
 }
 
+function drawEntityHealthBar(sx, sy, entity) {
+  if (entity.health >= entity.maxHealth) return;
+  if (!['orca', 'whale', 'megalodon', 'mosasaurus'].includes(entity.type)) return;
+  const barW = 30 * entity.size * 0.3;
+  const barH = 3;
+  const bx = sx - barW / 2;
+  const by = sy - 18 * entity.size * 0.4;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(bx, by, barW, barH);
+  const pct = entity.health / entity.maxHealth;
+  ctx.fillStyle = pct > 0.5 ? '#44CC44' : (pct > 0.25 ? '#CCAA22' : '#CC3333');
+  ctx.fillRect(bx, by, barW * pct, barH);
+}
+
 function updateEntities() {
   for (const e of entities) {
     if (e.type === 'clownfish') {
@@ -1135,6 +1196,7 @@ function updateBiteCollision() {
           }
           if (e.type === 'megalodon') localStorage.setItem('deepFeastMegaKill', '1');
           if (e.type === 'mosasaurus') localStorage.setItem('deepFeastMosaKill', '1');
+          queueRespawn(e);
           entities.splice(i, 1);
         }
       }
@@ -1342,6 +1404,7 @@ function respawnPlayer() {
   player.sprinting = false;
   player.staminaLeft = SPRINT_MAX;
   coinsThisRun = 0;
+  respawnQueue = [];
   gameState = STATE_PLAYING;
   initEntities();
   initFamily();
@@ -1477,6 +1540,55 @@ function handleShopClick(pos) {
   }
 }
 
+function replenishFood() {
+  let clamCount = 0, clownCount = 0;
+  for (const e of entities) {
+    if (e.type === 'clam' || e.type === 'seashell') clamCount++;
+    if (e.type === 'clownfish') clownCount++;
+  }
+  if (clamCount < 30) {
+    const x = Math.random() * WORLD_W;
+    if (Math.random() > 0.5) spawnClam(x, WORLD_H - 70 + Math.random() * 10);
+    else spawnSeashell(x, WORLD_H - 68 + Math.random() * 8);
+  }
+  if (clownCount < 40) {
+    spawnClownfish(Math.random() * WORLD_W, 100 + Math.random() * (WORLD_H - 250));
+  }
+}
+
+function drawTitleScreen() {
+  drawOceanBackground();
+  drawOceanFloor();
+  drawBubbles();
+
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  ctx.save();
+  ctx.textAlign = 'center';
+
+  ctx.font = 'bold 42px sans-serif';
+  ctx.fillStyle = '#22AAFF';
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 8;
+  ctx.fillText('Deep Feast', CANVAS_W / 2, CANVAS_H / 2 - 40);
+
+  ctx.shadowBlur = 0;
+  ctx.font = '16px sans-serif';
+  ctx.fillStyle = '#CCDDEE';
+  ctx.fillText('Eat. Grow. Survive.', CANVAS_W / 2, CANVAS_H / 2);
+
+  ctx.font = '14px sans-serif';
+  ctx.fillStyle = '#8899AA';
+  ctx.fillText('Click or press any key to start', CANVAS_W / 2, CANVAS_H / 2 + 40);
+
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = '#556677';
+  ctx.fillText('WASD to swim \u00B7 Shift to sprint \u00B7 Click to bite \u00B7 F for family', CANVAS_W / 2, CANVAS_H / 2 + 70);
+
+  ctx.restore();
+}
+
 // ============================================================
 // GAME LOOP
 // ============================================================
@@ -1488,7 +1600,7 @@ function gameLoop(timestamp) {
   while (accumulator >= FIXED_DT) {
     accumulator -= FIXED_DT;
     updateBubbles();
-    if (gameState === STATE_PLAYING) {
+    if (gameStarted && gameState === STATE_PLAYING) {
       updatePlayerInput();
       updatePlayer();
       updateFamily();
@@ -1496,11 +1608,24 @@ function gameLoop(timestamp) {
       updateBiteCollision();
       updateEnemyDamage();
       updateCamera(player.x, player.y);
+      updateRespawns();
+      replenishCounter++;
+      if (replenishCounter >= 60) {
+        replenishCounter = 0;
+        replenishFood();
+      }
     }
   }
 
   // Draw
   ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+  if (!gameStarted) {
+    drawTitleScreen();
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
   drawOceanBackground();
   drawOceanFloor();
 
@@ -1518,6 +1643,7 @@ function gameLoop(timestamp) {
     else if (e.type === 'whale') drawWhale(sx, sy, e.size, e.vx, e.swimTimer || 0);
     else if (e.type === 'megalodon') drawMegalodon(sx, sy, e.size, e.vx, e.swimTimer || 0);
     else if (e.type === 'mosasaurus') drawMosasaurus(sx, sy, e.size, e.vx, e.swimTimer || 0);
+    drawEntityHealthBar(sx, sy, e);
   }
 
   // Draw family
