@@ -97,6 +97,11 @@ let player = {
   biting: false,
   biteCharged: false,
   canHitSomething: false,
+  latchTarget: null,
+  latchTimer: 0,
+  latchMaxTime: 2.0,
+  latchOffsetX: 0,
+  latchOffsetY: 0,
 };
 
 // ============================================================
@@ -1176,6 +1181,16 @@ function updateBiteCollision() {
         break;
       }
 
+      // Latch onto living fish (not clams/seashells/meat)
+      if (!['clam', 'seashell', 'meat'].includes(e.type) && mouseHoldTime < FIXED_DT * 2 && !player.latchTarget) {
+        player.latchTarget = e;
+        player.latchTimer = 0;
+        player.latchOffsetX = player.x - e.x;
+        player.latchOffsetY = player.y - e.y;
+        playBite();
+        break;
+      }
+
       if (mouseHoldTime < FIXED_DT * 2) {
         const dmg = player.biteCharged ? player.biteForce * BITE_DAMAGE_MULT : player.biteForce;
         e.health -= dmg;
@@ -1205,6 +1220,56 @@ function updateBiteCollision() {
   }
 }
 
+function updateLatch() {
+  if (!player.latchTarget || !player.alive) { player.latchTarget = null; return; }
+  const e = player.latchTarget;
+
+  if (!entities.includes(e) || e.health <= 0) {
+    player.latchTarget = null;
+    return;
+  }
+
+  // Move with target
+  player.x = e.x + player.latchOffsetX;
+  player.y = e.y + player.latchOffsetY;
+
+  // Deal continuous damage
+  const dps = player.biteCharged ? player.biteForce * BITE_DAMAGE_MULT : player.biteForce;
+  e.health -= dps * FIXED_DT;
+
+  player.latchTimer += FIXED_DT;
+
+  // Auto-release after max time
+  if (player.latchTimer >= player.latchMaxTime) {
+    player.latchTarget = null;
+  }
+
+  // Release on mouse release (after initial grab)
+  if (!mouseDown && player.latchTimer > 0.2) {
+    player.latchTarget = null;
+  }
+
+  // Kill target if health depleted
+  if (e.health <= 0) {
+    if (e.meatCount) dropMeat(e.x, e.y, e.meatCount, e.size);
+    if (!e.meatCount) {
+      player.coins += e.coins;
+      coinsThisRun += e.coins;
+      player.biteForce += e.bfGain;
+      player.maxHealth += e.hpGain;
+      player.health = Math.min(player.health + e.hpGain, player.maxHealth);
+      player.size += e.sizeGain;
+      localStorage.setItem('deepFeastCoins', player.coins);
+      playCoin();
+    }
+    if (e.type === 'megalodon') localStorage.setItem('deepFeastMegaKill', '1');
+    if (e.type === 'mosasaurus') localStorage.setItem('deepFeastMosaKill', '1');
+    queueRespawn(e);
+    entities.splice(entities.indexOf(e), 1);
+    player.latchTarget = null;
+  }
+}
+
 let lastDmgSound = 0;
 
 function updateEnemyDamage() {
@@ -1217,6 +1282,7 @@ function updateEnemyDamage() {
     const hitDist = (20 * player.size + 15 * e.size);
     if (dist < hitDist) {
       player.health -= e.damage * FIXED_DT;
+      player.latchTarget = null;
       if (Date.now() - lastDmgSound > 500) { playDamage(); lastDmgSound = Date.now(); }
       if (player.health <= 0) {
         player.health = 0;
@@ -1606,6 +1672,7 @@ function gameLoop(timestamp) {
       updateFamily();
       updateEntities();
       updateBiteCollision();
+      updateLatch();
       updateEnemyDamage();
       updateCamera(player.x, player.y);
       updateRespawns();
