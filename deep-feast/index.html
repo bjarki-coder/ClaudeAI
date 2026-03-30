@@ -132,6 +132,44 @@ function dropMeat(x, y, count, totalSize) {
   }
 }
 
+function spawnMediumFish(x, y) {
+  entities.push({
+    type: 'medfish', x, y,
+    vx: (Math.random() > 0.5 ? 1 : -1) * (1 + Math.random()), vy: (Math.random() - 0.5) * 0.5,
+    size: 0.9 + Math.random() * 0.4, health: 30, maxHealth: 30,
+    coins: 8, bfGain: 3, hpGain: 5, sizeGain: 0.01,
+    turnTimer: Math.random() * 4,
+    color: `hsl(${Math.floor(Math.random() * 360)}, 50%, 45%)`,
+    swimTimer: 0, meatCount: 2, damage: 5
+  });
+}
+
+function spawnOrca(x, y) {
+  entities.push({
+    type: 'orca', x, y,
+    vx: (Math.random() > 0.5 ? 1 : -1) * 1.5, vy: 0,
+    size: 2.5, health: 200, maxHealth: 200,
+    coins: 30, bfGain: 5, hpGain: 8, sizeGain: 0.03,
+    turnTimer: Math.random() * 5,
+    swimTimer: 0, meatCount: 5,
+    aggroRange: 300, damage: 20,
+    respawnTime: 60, respawnX: x, respawnY: y
+  });
+}
+
+function spawnWhale(x, y) {
+  entities.push({
+    type: 'whale', x, y,
+    vx: (Math.random() > 0.5 ? 0.3 : -0.3), vy: 0,
+    size: 4.0, health: 400, maxHealth: 400,
+    coins: 40, bfGain: 5, hpGain: 8, sizeGain: 0.04,
+    turnTimer: Math.random() * 8,
+    swimTimer: 0, meatCount: 5,
+    suckRange: 150, suckForce: 0.8,
+    respawnTime: 90, respawnX: x, respawnY: y
+  });
+}
+
 function initEntities() {
   entities = [];
   for (let x = 50; x < WORLD_W; x += 80 + Math.random() * 120) {
@@ -148,6 +186,16 @@ function initEntities() {
       spawnClownfish(sx + (Math.random() - 0.5) * 80, sy + (Math.random() - 0.5) * 40);
     }
   }
+  // Medium fish
+  for (let i = 0; i < 20; i++) {
+    spawnMediumFish(200 + Math.random() * (WORLD_W - 400), 100 + Math.random() * (WORLD_H - 250));
+  }
+  // Orcas
+  const orcaPositions = [[1000, 400], [2500, 300], [4000, 500], [5000, 350], [3000, 600]];
+  for (const [ox, oy] of orcaPositions) { spawnOrca(ox, oy); }
+  // Whales
+  const whalePositions = [[1500, 450], [3500, 350], [5000, 500]];
+  for (const [wx, wy] of whalePositions) { spawnWhale(wx, wy); }
 }
 
 // ============================================================
@@ -449,6 +497,104 @@ function drawMeat(x, y, s) {
   ctx.fill();
 }
 
+function drawMediumFish(x, y, s, vx, swimTimer, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (vx < 0) ctx.scale(-1, 1);
+  const tw = Math.sin(swimTimer * 7) * 0.2;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(-14 * s, 0);
+  ctx.lineTo(-22 * s, (-7 + tw * 7) * s);
+  ctx.lineTo(-22 * s, (7 + tw * 7) * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 16 * s, 9 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(8 * s, -2 * s, 2.5 * s, 0, Math.PI * 2);
+  ctx.fillStyle = 'white';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(8.5 * s, -2 * s, 1.2 * s, 0, Math.PI * 2);
+  ctx.fillStyle = 'black';
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawOrca(x, y, s, vx, swimTimer) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (vx < 0) ctx.scale(-1, 1);
+  const sc = s * 0.5;
+  const tw = Math.sin(swimTimer * 5) * 0.15;
+  ctx.fillStyle = '#1A1A1A';
+  ctx.beginPath();
+  ctx.moveTo(-22 * sc, 0);
+  ctx.lineTo(-34 * sc, (-10 + tw * 10) * sc);
+  ctx.lineTo(-34 * sc, (10 + tw * 10) * sc);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 24 * sc, 12 * sc, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath();
+  ctx.ellipse(2 * sc, 4 * sc, 18 * sc, 6 * sc, 0, 0, Math.PI);
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath();
+  ctx.ellipse(10 * sc, -4 * sc, 5 * sc, 3 * sc, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(11 * sc, -4 * sc, 1.5 * sc, 0, Math.PI * 2);
+  ctx.fillStyle = '#111';
+  ctx.fill();
+  ctx.fillStyle = '#1A1A1A';
+  ctx.beginPath();
+  ctx.moveTo(-2 * sc, -12 * sc);
+  ctx.lineTo(4 * sc, -22 * sc);
+  ctx.lineTo(8 * sc, -12 * sc);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawWhale(x, y, s, vx, swimTimer) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (vx < 0) ctx.scale(-1, 1);
+  const sc = s * 0.4;
+  const tw = Math.sin(swimTimer * 3) * 0.1;
+  ctx.fillStyle = '#3A5A7A';
+  ctx.beginPath();
+  ctx.moveTo(-30 * sc, 0);
+  ctx.lineTo(-45 * sc, (-12 + tw * 12) * sc);
+  ctx.lineTo(-45 * sc, (12 + tw * 12) * sc);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 35 * sc, 16 * sc, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#4A6A8A';
+  ctx.fill();
+  ctx.fillStyle = '#8AAABA';
+  ctx.beginPath();
+  ctx.ellipse(5 * sc, 6 * sc, 25 * sc, 8 * sc, 0, 0, Math.PI);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(20 * sc, -4 * sc, 2 * sc, 0, Math.PI * 2);
+  ctx.fillStyle = '#111';
+  ctx.fill();
+  ctx.strokeStyle = '#2A4A6A';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(28 * sc, 2 * sc);
+  ctx.quadraticCurveTo(32 * sc, 6 * sc, 25 * sc, 6 * sc);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function updateEntities() {
   for (const e of entities) {
     if (e.type === 'clownfish') {
@@ -472,6 +618,82 @@ function updateEntities() {
       if (e.y > WORLD_H - 65) { e.y = WORLD_H - 65; e.vy = 0; }
       e.lifetime -= FIXED_DT;
       if (e.lifetime <= 0) { e.health = -1; }
+    }
+
+    if (e.type === 'medfish') {
+      e.swimTimer += FIXED_DT;
+      e.turnTimer -= FIXED_DT;
+      const dx = player.x - e.x;
+      const dy = player.y - e.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 200) {
+        if (player.size > e.size * 1.3) {
+          e.vx += (e.x - player.x) * 0.005;
+          e.vy += (e.y - player.y) * 0.005;
+        } else if (e.size > player.size * 1.3) {
+          e.vx += dx * 0.003;
+          e.vy += dy * 0.003;
+        }
+      } else if (e.turnTimer <= 0) {
+        e.vx = (Math.random() - 0.5) * 2;
+        e.vy = (Math.random() - 0.5) * 0.5;
+        e.turnTimer = 3 + Math.random() * 4;
+      }
+      const maxSpd = 2;
+      const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+      if (spd > maxSpd) { e.vx *= maxSpd / spd; e.vy *= maxSpd / spd; }
+      e.x += e.vx;
+      e.y += e.vy;
+      if (e.x < 30 || e.x > WORLD_W - 30) e.vx *= -1;
+      if (e.y < 30 || e.y > WORLD_H - 80) e.vy *= -1;
+    }
+
+    if (e.type === 'orca') {
+      e.swimTimer += FIXED_DT;
+      const dx = player.x - e.x;
+      const dy = player.y - e.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < e.aggroRange) {
+        e.vx += dx * 0.004;
+        e.vy += dy * 0.004;
+      } else {
+        e.turnTimer -= FIXED_DT;
+        if (e.turnTimer <= 0) {
+          e.vx = (Math.random() - 0.5) * 3;
+          e.vy = (Math.random() - 0.5) * 1;
+          e.turnTimer = 4 + Math.random() * 4;
+        }
+      }
+      const maxSpd = 2.5;
+      const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+      if (spd > maxSpd) { e.vx *= maxSpd / spd; e.vy *= maxSpd / spd; }
+      e.x += e.vx;
+      e.y += e.vy;
+      if (e.x < 30 || e.x > WORLD_W - 30) e.vx *= -1;
+      if (e.y < 30 || e.y > WORLD_H - 80) e.vy *= -1;
+    }
+
+    if (e.type === 'whale') {
+      e.swimTimer += FIXED_DT;
+      e.turnTimer -= FIXED_DT;
+      if (e.turnTimer <= 0) {
+        e.vx = (Math.random() > 0.5 ? 0.3 : -0.3);
+        e.vy = (Math.random() - 0.5) * 0.2;
+        e.turnTimer = 6 + Math.random() * 8;
+      }
+      e.x += e.vx;
+      e.y += e.vy;
+      if (e.x < 60 || e.x > WORLD_W - 60) e.vx *= -1;
+      if (e.y < 60 || e.y > WORLD_H - 100) e.vy *= -1;
+      if (player.size < 1.5 && player.alive) {
+        const sdx = e.x + (e.vx > 0 ? 30 : -30) * e.size * 0.4 - player.x;
+        const sdy = e.y - player.y;
+        const sdist = Math.sqrt(sdx * sdx + sdy * sdy);
+        if (sdist < e.suckRange && sdist > 5) {
+          player.x += sdx / sdist * e.suckForce;
+          player.y += sdy / sdist * e.suckForce;
+        }
+      }
     }
   }
   // Remove dead entities
@@ -533,6 +755,24 @@ function updateBiteCollision() {
   }
 }
 
+function updateEnemyDamage() {
+  if (!player.alive) return;
+  for (const e of entities) {
+    if (!e.damage) continue;
+    const dx = player.x - e.x;
+    const dy = player.y - e.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const hitDist = (20 * player.size + 15 * e.size);
+    if (dist < hitDist) {
+      player.health -= e.damage * FIXED_DT;
+      if (player.health <= 0) {
+        player.health = 0;
+        player.alive = false;
+      }
+    }
+  }
+}
+
 // ============================================================
 // GAME LOOP
 // ============================================================
@@ -547,6 +787,7 @@ function gameLoop(timestamp) {
     updatePlayer();
     updateEntities();
     updateBiteCollision();
+    updateEnemyDamage();
     updateCamera(player.x, player.y);
   }
 
@@ -564,6 +805,9 @@ function gameLoop(timestamp) {
     else if (e.type === 'seashell') drawSeashell(sx, sy, e.size);
     else if (e.type === 'clownfish') drawClownfish(sx, sy, e.size, e.vx, e.swimTimer || 0);
     else if (e.type === 'meat') drawMeat(sx, sy, e.size);
+    else if (e.type === 'medfish') drawMediumFish(sx, sy, e.size, e.vx, e.swimTimer || 0, e.color);
+    else if (e.type === 'orca') drawOrca(sx, sy, e.size, e.vx, e.swimTimer || 0);
+    else if (e.type === 'whale') drawWhale(sx, sy, e.size, e.vx, e.swimTimer || 0);
   }
 
   drawPiranha(player.x - camX, player.y - camY, player.size, player.facingRight, player.swimTimer, 'normal', player.biting, player.biteCharged, player.canHitSomething);
