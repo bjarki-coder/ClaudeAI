@@ -1,0 +1,80 @@
+<h2>Death Menu — Design Overview</h2>
+<p class="subtitle">Skins, worlds, and navigation from the Game Over screen</p>
+
+<div class="section">
+  <h3>Game Over Menu Flow</h3>
+  <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 150px; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 2px solid #cc4444; text-align: center;">
+      <p class="label" style="color: #cc4444;">Game Over Panel</p>
+      <p style="font-size: 13px;">Score + Best Score<br><br>Three buttons:<br><strong>Retry</strong><br><strong>Skins</strong><br><strong>Worlds</strong></p>
+    </div>
+    <div style="font-size: 24px; display: flex; align-items: center; color: #666;">&rarr;</div>
+    <div style="flex: 1; min-width: 150px; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 2px solid #44aa44; text-align: center;">
+      <p class="label" style="color: #44aa44;">Skins Screen</p>
+      <p style="font-size: 13px;">Grid of bird skins<br>Click to select<br>Selected = highlighted<br><strong>Back</strong> button</p>
+    </div>
+    <div style="font-size: 24px; display: flex; align-items: center; color: #666;">&rarr;</div>
+    <div style="flex: 1; min-width: 150px; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 2px solid #4488cc; text-align: center;">
+      <p class="label" style="color: #4488cc;">Worlds Screen</p>
+      <p style="font-size: 13px;">4 world cards with preview<br>Click to select<br>Selected = highlighted<br><strong>Back</strong> button</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Skins (Fun/Silly)</h3>
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+    <div style="padding: 12px; background: rgba(107,61,31,0.3); border-radius: 8px; text-align: center; border: 2px solid #6B3D1F;">
+      <div style="font-size: 32px; margin-bottom: 4px;">🦅</div>
+      <p style="font-size: 12px; font-weight: bold;">Hawk</p>
+      <p style="font-size: 10px; color: #888;">Default</p>
+    </div>
+    <div style="padding: 12px; background: rgba(200,50,50,0.2); border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
+      <div style="font-size: 32px; margin-bottom: 4px;">🔥</div>
+      <p style="font-size: 12px; font-weight: bold;">Fire Bird</p>
+      <p style="font-size: 10px; color: #888;">Red/orange flames</p>
+    </div>
+    <div style="padding: 12px; background: rgba(50,150,255,0.2); border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
+      <div style="font-size: 32px; margin-bottom: 4px;">❄️</div>
+      <p style="font-size: 12px; font-weight: bold;">Ice Bird</p>
+      <p style="font-size: 10px; color: #888;">Crystal blue/white</p>
+    </div>
+    <div style="padding: 12px; background: rgba(255,200,0,0.2); border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
+      <div style="font-size: 32px; margin-bottom: 4px;">🤖</div>
+      <p style="font-size: 12px; font-weight: bold;">Robo Bird</p>
+      <p style="font-size: 10px; color: #888;">Metal body, LED eye</p>
+    </div>
+    <div style="padding: 12px; background: linear-gradient(135deg, rgba(255,0,0,0.15), rgba(0,0,255,0.15)); border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
+      <div style="font-size: 32px; margin-bottom: 4px;">🌈</div>
+      <p style="font-size: 12px; font-weight: bold;">Rainbow</p>
+      <p style="font-size: 10px; color: #888;">Color-shifting body</p>
+    </div>
+    <div style="padding: 12px; background: rgba(100,0,200,0.2); border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
+      <div style="font-size: 32px; margin-bottom: 4px;">👻</div>
+      <p style="font-size: 12px; font-weight: bold;">Ghost Bird</p>
+      <p style="font-size: 10px; color: #888;">Semi-transparent, glows</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Worlds</h3>
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+    <div style="padding: 12px; border-radius: 8px; text-align: center; border: 2px solid #88AACC; background: linear-gradient(180deg, #5B86B8 0%, #D8DDE4 100%);">
+      <p style="font-size: 12px; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">Snowy Mountains</p>
+      <p style="font-size: 10px; color: #ddd;">Default</p>
+    </div>
+    <div style="padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1); background: linear-gradient(180deg, #87CEEB 0%, #228B22 100%);">
+      <p style="font-size: 12px; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">Forest</p>
+      <p style="font-size: 10px; color: #ddd;">Green trees, rivers</p>
+    </div>
+    <div style="padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1); background: linear-gradient(180deg, #E8C86A 0%, #C2956A 100%);">
+      <p style="font-size: 12px; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">Desert</p>
+      <p style="font-size: 10px; color: #ddd;">Sand dunes, cacti</p>
+    </div>
+    <div style="padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1); background: linear-gradient(180deg, #0a0a2a 0%, #1a1a3a 100%);">
+      <p style="font-size: 12px; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">Moon</p>
+      <p style="font-size: 10px; color: #ddd;">Craters, stars, Earth</p>
+    </div>
+  </div>
+</div>

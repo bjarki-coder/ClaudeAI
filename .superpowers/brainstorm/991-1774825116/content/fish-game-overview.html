@@ -1,0 +1,123 @@
+<h2>Deep Feast — Game Design Overview</h2>
+<p class="subtitle">Eat, grow, and become the biggest fish in the ocean</p>
+
+<div class="section">
+  <h3>Game Scene</h3>
+  <div class="mockup">
+    <div class="mockup-header">Side-View Ocean</div>
+    <div class="mockup-body" style="height: 420px; position: relative; overflow: hidden; font-family: sans-serif;">
+
+      <!-- Water gradient: bright top → dark bottom -->
+      <div style="position:absolute; top:0; left:0; right:0; bottom:0; background: linear-gradient(180deg, #1E90FF 0%, #1570C0 20%, #0A4A8A 50%, #062A55 80%, #031530 100%);"></div>
+
+      <!-- Sun rays from top -->
+      <div style="position:absolute; top:0; left:20%; width:60%; height:50%; background: linear-gradient(180deg, rgba(255,255,200,0.15) 0%, rgba(255,255,200,0) 100%);"></div>
+
+      <!-- Coral reef at bottom -->
+      <svg style="position:absolute; bottom:0; left:0; width:100%; height:80px;" viewBox="0 0 600 80">
+        <!-- Sand -->
+        <rect x="0" y="60" width="600" height="20" fill="#C4A56B"/>
+        <!-- Corals -->
+        <ellipse cx="80" cy="58" rx="25" ry="18" fill="#FF6B6B"/>
+        <ellipse cx="80" cy="52" rx="15" ry="12" fill="#FF8888"/>
+        <ellipse cx="180" cy="55" rx="20" ry="22" fill="#50C878"/>
+        <ellipse cx="180" cy="48" rx="12" ry="15" fill="#70E898"/>
+        <rect x="280" y="35" width="6" height="25" rx="3" fill="#FF69B4"/>
+        <rect x="290" y="30" width="5" height="30" rx="2" fill="#FF89C4"/>
+        <rect x="275" y="38" width="5" height="22" rx="2" fill="#FF49A4"/>
+        <ellipse cx="400" cy="56" rx="30" ry="16" fill="#DDA0DD"/>
+        <ellipse cx="400" cy="50" rx="18" ry="10" fill="#EDB0ED"/>
+        <rect x="500" y="40" width="5" height="20" rx="2" fill="#FF6347"/>
+        <rect x="510" y="35" width="4" height="25" rx="2" fill="#FF7357"/>
+        <rect x="495" y="42" width="4" height="18" rx="2" fill="#FF5337"/>
+        <!-- Seashells -->
+        <ellipse cx="140" cy="68" rx="6" ry="4" fill="#F0E0C0"/>
+        <ellipse cx="350" cy="70" rx="5" ry="3" fill="#E8D0B0"/>
+        <ellipse cx="520" cy="69" rx="7" ry="4" fill="#F0E0C0"/>
+        <!-- Clams -->
+        <ellipse cx="240" cy="67" rx="8" ry="5" fill="#8B7D6B"/>
+        <ellipse cx="240" cy="65" rx="7" ry="3" fill="#9B8D7B"/>
+        <ellipse cx="460" cy="68" rx="7" ry="5" fill="#8B7D6B"/>
+      </svg>
+
+      <!-- Bubbles -->
+      <div style="position:absolute; left:15%; top:30%; width:6px; height:6px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.1);"></div>
+      <div style="position:absolute; left:60%; top:50%; width:4px; height:4px; border-radius:50%; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05);"></div>
+      <div style="position:absolute; left:80%; top:20%; width:8px; height:8px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.1);"></div>
+
+      <!-- Small fish (food) -->
+      <div style="position:absolute; left:70%; top:25%; font-size:14px;">🐟</div>
+      <div style="position:absolute; left:25%; top:45%; font-size:12px;">🐟</div>
+      <div style="position:absolute; left:85%; top:60%; font-size:10px;">🐟</div>
+
+      <!-- Player fish -->
+      <div style="position:absolute; left:30%; top:35%;">
+        <svg viewBox="0 0 60 30" width="60" height="30">
+          <ellipse cx="28" cy="15" rx="20" ry="12" fill="#FF8C00"/>
+          <polygon points="48,15 58,5 58,25" fill="#FF6600"/>
+          <circle cx="18" cy="11" r="3" fill="white"/>
+          <circle cx="17" cy="11" r="1.5" fill="black"/>
+          <path d="M 10,15 Q 6,15 8,13" stroke="#FF6600" fill="none" stroke-width="1"/>
+        </svg>
+      </div>
+
+      <!-- Family fish (smaller, following) -->
+      <div style="position:absolute; left:22%; top:38%; opacity:0.8;">
+        <svg viewBox="0 0 40 20" width="32" height="16">
+          <ellipse cx="18" cy="10" rx="13" ry="8" fill="#FFA040"/>
+          <polygon points="31,10 38,4 38,16" fill="#FF8020"/>
+          <circle cx="11" cy="7" r="2" fill="white"/>
+          <circle cx="10.5" cy="7" r="1" fill="black"/>
+        </svg>
+      </div>
+      <div style="position:absolute; left:18%; top:33%; opacity:0.7;">
+        <svg viewBox="0 0 40 20" width="28" height="14">
+          <ellipse cx="18" cy="10" rx="13" ry="8" fill="#FFA040"/>
+          <polygon points="31,10 38,4 38,16" fill="#FF8020"/>
+          <circle cx="11" cy="7" r="2" fill="white"/>
+          <circle cx="10.5" cy="7" r="1" fill="black"/>
+        </svg>
+      </div>
+
+      <!-- UI: Coins -->
+      <div style="position:absolute; top:12px; left:12px; background:rgba(0,0,0,0.4); padding:4px 12px; border-radius:12px; color:#FFD700; font-size:16px; font-weight:bold;">
+        🪙 142
+      </div>
+
+      <!-- UI: Sprint bar -->
+      <div style="position:absolute; top:12px; right:12px; text-align:right;">
+        <div style="font-size:11px; color:rgba(255,255,255,0.7); margin-bottom:3px;">Sprint</div>
+        <div style="width:120px; height:8px; background:rgba(0,0,0,0.4); border-radius:4px; overflow:hidden;">
+          <div style="width:75%; height:100%; background:linear-gradient(90deg, #00BFFF, #00FF88); border-radius:4px;"></div>
+        </div>
+      </div>
+
+      <!-- UI: Size/Stats -->
+      <div style="position:absolute; bottom:85px; left:12px; background:rgba(0,0,0,0.4); padding:4px 10px; border-radius:8px; color:white; font-size:11px;">
+        Size: 3 &nbsp;|&nbsp; Jaw: 5 &nbsp;|&nbsp; ❤️ 80/100
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Key Elements</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Player Fish</p>
+      <p>Swim with arrow keys/WASD. Eat clams, seashells, small fish. Grow bigger automatically. Jaw + health increase as you eat.</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Sprint</p>
+      <p>Hold Shift to boost. 13-second stamina bar. Recharges when not sprinting.</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Family</p>
+      <p>Toggle with F key. Smaller fish follow you in formation. They help eat nearby food. You start alone, gain family as you grow.</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Shop</p>
+      <p>Spend coins to unlock new fish: Clownfish (free) → Bass (50🪙) → Megalodon (200🪙) → Mosasaurus (500🪙). Bigger fish start bigger.</p>
+    </div>
+  </div>
+</div>

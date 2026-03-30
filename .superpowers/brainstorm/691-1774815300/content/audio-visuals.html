@@ -1,0 +1,145 @@
+<h2>Mountain Hawk — Audio & Visual Details</h2>
+<p class="subtitle">Parallax layers, animations, particles, and immersive sound</p>
+
+<div class="section">
+  <h3>Parallax Background Layers</h3>
+  <div class="mockup">
+    <div class="mockup-header">Layer Breakdown (back to front)</div>
+    <div class="mockup-body" style="height: 320px; position: relative; overflow: hidden; font-family: sans-serif; background: #1a1a2e;">
+
+      <!-- Layer 1: Sky -->
+      <div style="position:absolute; top:0; left:0; right:0; height:100%; background: linear-gradient(180deg, #5B86B8 0%, #8BACC8 40%, #B8C8D8 70%, #D8DDE4 100%); opacity: 0.9;">
+        <div style="position:absolute; top:8px; left:12px; background: rgba(0,0,0,0.5); color:white; padding:3px 10px; border-radius:4px; font-size:11px;">Layer 1 — Sky gradient (static)</div>
+      </div>
+
+      <!-- Layer 2: Far mountains -->
+      <div style="position:absolute; bottom:100px; width:100%; height:160px;">
+        <svg viewBox="0 0 800 160" style="width:100%; height:100%;">
+          <polygon points="0,160 80,70 180,110 280,40 380,90 480,30 580,80 680,50 780,100 800,160" fill="rgba(160,170,185,0.7)"/>
+          <polygon points="260,55 280,40 300,58" fill="rgba(255,255,255,0.6)"/>
+          <polygon points="460,45 480,30 500,48" fill="rgba(255,255,255,0.6)"/>
+        </svg>
+        <div style="position:absolute; top:8px; left:12px; background: rgba(0,0,0,0.5); color:white; padding:3px 10px; border-radius:4px; font-size:11px;">Layer 2 — Far mountains (slow scroll, 0.2x speed)</div>
+      </div>
+
+      <!-- Layer 3: Near mountains -->
+      <div style="position:absolute; bottom:70px; width:100%; height:140px;">
+        <svg viewBox="0 0 800 140" style="width:100%; height:100%;">
+          <polygon points="0,140 60,80 140,30 240,90 340,15 440,70 540,5 640,60 740,25 800,80 800,140" fill="rgba(120,130,145,0.8)"/>
+          <polygon points="125,45 140,30 155,48" fill="rgba(255,255,255,0.8)"/>
+          <polygon points="325,28 340,15 355,32" fill="rgba(255,255,255,0.8)"/>
+          <polygon points="525,18 540,5 555,22" fill="rgba(255,255,255,0.8)"/>
+        </svg>
+        <div style="position:absolute; top:8px; left:12px; background: rgba(0,0,0,0.5); color:white; padding:3px 10px; border-radius:4px; font-size:11px;">Layer 3 — Near mountains (medium scroll, 0.5x speed)</div>
+      </div>
+
+      <!-- Layer 4: Pine trees -->
+      <div style="position:absolute; bottom:45px; width:100%; height:50px;">
+        <svg viewBox="0 0 800 50" style="width:100%; height:100%;">
+          <polygon points="30,50 38,8 46,50" fill="#1A3A0A"/>
+          <polygon points="90,50 97,15 104,50" fill="#2D5016"/>
+          <polygon points="170,50 176,5 182,50" fill="#1A3A0A"/>
+          <polygon points="250,50 257,12 264,50" fill="#2D5016"/>
+          <polygon points="340,50 346,8 352,50" fill="#1A3A0A"/>
+          <polygon points="430,50 437,18 444,50" fill="#2D5016"/>
+          <polygon points="520,50 526,6 532,50" fill="#1A3A0A"/>
+          <polygon points="610,50 617,14 624,50" fill="#2D5016"/>
+          <polygon points="700,50 706,10 712,50" fill="#1A3A0A"/>
+          <polygon points="770,50 776,16 782,50" fill="#2D5016"/>
+        </svg>
+        <div style="position:absolute; top:4px; left:12px; background: rgba(0,0,0,0.5); color:white; padding:3px 10px; border-radius:4px; font-size:11px;">Layer 4 — Pine trees (fast scroll, 0.8x speed)</div>
+      </div>
+
+      <!-- Layer 5: Ground -->
+      <div style="position:absolute; bottom:0; width:100%; height:50px; background: linear-gradient(180deg, #C8C8C8, #FFFFFF);">
+        <div style="position:absolute; top:8px; left:12px; background: rgba(0,0,0,0.5); color:white; padding:3px 10px; border-radius:4px; font-size:11px;">Layer 5 — Snowy ground (full scroll, 1x speed)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Hawk Animation</h3>
+  <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+    <div style="text-align: center; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <svg viewBox="0 0 60 40" width="80" height="53" style="display:block; margin: 0 auto 8px;">
+        <ellipse cx="30" cy="22" rx="16" ry="7" fill="#5C3A1E"/>
+        <path d="M 22,18 Q 10,2 3,5 Q 14,12 22,18" fill="#7A4E2A"/>
+        <path d="M 38,18 Q 50,2 57,5 Q 46,12 38,18" fill="#7A4E2A"/>
+        <ellipse cx="44" cy="18" rx="6" ry="5" fill="#4A2E14"/>
+        <polygon points="50,17 56,18 50,19" fill="#DAA520"/>
+        <circle cx="46" cy="16" r="1.3" fill="#FFD700"/>
+        <circle cx="46" cy="16" r="0.6" fill="black"/>
+      </svg>
+      <p class="label">Wings Up (flap)</p>
+    </div>
+    <div style="text-align: center; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <svg viewBox="0 0 60 40" width="80" height="53" style="display:block; margin: 0 auto 8px;">
+        <ellipse cx="30" cy="22" rx="16" ry="7" fill="#5C3A1E"/>
+        <path d="M 22,22 Q 14,20 6,22 Q 14,22 22,22" fill="#7A4E2A"/>
+        <path d="M 38,22 Q 46,20 54,22 Q 46,22 38,22" fill="#7A4E2A"/>
+        <ellipse cx="44" cy="18" rx="6" ry="5" fill="#4A2E14"/>
+        <polygon points="50,17 56,18 50,19" fill="#DAA520"/>
+        <circle cx="46" cy="16" r="1.3" fill="#FFD700"/>
+        <circle cx="46" cy="16" r="0.6" fill="black"/>
+      </svg>
+      <p class="label">Wings Level (glide)</p>
+    </div>
+    <div style="text-align: center; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <svg viewBox="0 0 60 40" width="80" height="53" style="display:block; margin: 0 auto 8px;">
+        <ellipse cx="30" cy="22" rx="16" ry="7" fill="#5C3A1E"/>
+        <path d="M 22,24 Q 12,32 4,36 Q 14,28 22,24" fill="#7A4E2A"/>
+        <path d="M 38,24 Q 48,32 56,36 Q 46,28 38,24" fill="#7A4E2A"/>
+        <ellipse cx="44" cy="18" rx="6" ry="5" fill="#4A2E14"/>
+        <polygon points="50,17 56,18 50,19" fill="#DAA520"/>
+        <circle cx="46" cy="16" r="1.3" fill="#FFD700"/>
+        <circle cx="46" cy="16" r="0.6" fill="black"/>
+      </svg>
+      <p class="label">Wings Down (fall)</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Particle Effects</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Snowfall</p>
+      <p style="font-size: 13px;">Gentle white particles drifting diagonally across the screen. Varying sizes and speeds for depth. Always active.</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Death Effect</p>
+      <p style="font-size: 13px;">Burst of feather particles on collision. Screen briefly flashes white. Hawk spirals downward.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Audio Design</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Ambient Loop</p>
+      <p style="font-size: 13px;">Mountain wind — constant, gentle, with subtle volume variation. Plays on all screens.</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Wing Flap</p>
+      <p style="font-size: 13px;">Short whoosh sound on each flap input. Procedurally generated with Web Audio API.</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Score Ding</p>
+      <p style="font-size: 13px;">Soft chime when passing through a gap. Procedural tone via Web Audio API.</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Eagle Cry</p>
+      <p style="font-size: 13px;">Occasional distant hawk screech at random intervals. Adds atmosphere without distraction.</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Collision</p>
+      <p style="font-size: 13px;">Thud/impact sound on hitting rock or ground. Short and punchy.</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Audio Generation</p>
+      <p style="font-size: 13px;">All sounds procedurally generated with Web Audio API — no external audio files needed.</p>
+    </div>
+  </div>
+</div>

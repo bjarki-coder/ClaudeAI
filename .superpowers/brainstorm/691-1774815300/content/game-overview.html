@@ -1,0 +1,110 @@
+<h2>Mountain Hawk — Game Design Overview</h2>
+<p class="subtitle">A realistic Flappy Bird clone set in snowy mountain peaks</p>
+
+<div class="section">
+  <h3>Core Concept</h3>
+  <div class="mockup">
+    <div class="mockup-header">Game Scene Layout</div>
+    <div class="mockup-body" style="background: linear-gradient(180deg, #87CEEB 0%, #B0C4DE 30%, #E8E8E8 60%, #FFFFFF 100%); height: 400px; position: relative; overflow: hidden; font-family: sans-serif;">
+
+      <!-- Far mountains -->
+      <div style="position:absolute; bottom:120px; width:100%; height:200px;">
+        <svg viewBox="0 0 800 200" style="width:100%; height:100%;">
+          <polygon points="0,200 100,60 200,140 300,30 400,120 500,20 600,100 700,50 800,130 800,200" fill="#C8D0D8" opacity="0.6"/>
+          <!-- Snow caps -->
+          <polygon points="280,50 300,30 320,50" fill="white" opacity="0.8"/>
+          <polygon points="480,40 500,20 520,40" fill="white" opacity="0.8"/>
+          <polygon points="680,65 700,50 720,70" fill="white" opacity="0.8"/>
+        </svg>
+      </div>
+
+      <!-- Near mountains -->
+      <div style="position:absolute; bottom:80px; width:100%; height:180px;">
+        <svg viewBox="0 0 800 180" style="width:100%; height:100%;">
+          <polygon points="0,180 50,100 150,40 250,110 350,20 450,90 550,10 650,80 750,30 800,100 800,180" fill="#A0A8B0"/>
+          <!-- Snow caps -->
+          <polygon points="130,60 150,40 170,65" fill="white"/>
+          <polygon points="330,40 350,20 370,45" fill="white"/>
+          <polygon points="530,30 550,10 570,35" fill="white"/>
+          <polygon points="730,45 750,30 770,50" fill="white"/>
+        </svg>
+      </div>
+
+      <!-- Pine trees on slopes -->
+      <div style="position:absolute; bottom:60px; width:100%;">
+        <svg viewBox="0 0 800 60" style="width:100%; height:60px;">
+          <!-- Trees -->
+          <polygon points="50,60 55,20 60,60" fill="#2D5016"/>
+          <polygon points="120,60 126,10 132,60" fill="#1A3A0A"/>
+          <polygon points="200,60 205,25 210,60" fill="#2D5016"/>
+          <polygon points="350,60 356,15 362,60" fill="#1A3A0A"/>
+          <polygon points="500,60 505,20 510,60" fill="#2D5016"/>
+          <polygon points="600,60 607,8 614,60" fill="#1A3A0A"/>
+          <polygon points="720,60 725,22 730,60" fill="#2D5016"/>
+        </svg>
+      </div>
+
+      <!-- Ground/snow -->
+      <div style="position:absolute; bottom:0; width:100%; height:70px; background: linear-gradient(180deg, #E8E8E8, #FFFFFF);"></div>
+
+      <!-- Gap (rock pillars) -->
+      <div style="position:absolute; left:55%; top:0; width:60px; height:140px; background: linear-gradient(90deg, #6B6B6B, #8B8B8B, #6B6B6B); border-radius: 0 0 8px 8px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
+        <div style="position:absolute; bottom:0; left:-5px; right:-5px; height:15px; background: white; border-radius: 0 0 12px 12px; opacity: 0.8;"></div>
+      </div>
+      <div style="position:absolute; left:55%; bottom:70px; width:60px; height:120px; background: linear-gradient(90deg, #6B6B6B, #8B8B8B, #6B6B6B); border-radius: 8px 8px 0 0; box-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
+        <div style="position:absolute; top:0; left:-5px; right:-5px; height:15px; background: white; border-radius: 12px 12px 0 0; opacity: 0.8;"></div>
+      </div>
+
+      <!-- Hawk -->
+      <div style="position:absolute; left:30%; top:35%; font-size:36px; transform: rotate(-5deg); filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.3));">
+        <svg viewBox="0 0 60 30" width="60" height="30">
+          <!-- Body -->
+          <ellipse cx="30" cy="18" rx="18" ry="8" fill="#5C3A1E"/>
+          <!-- Wing up -->
+          <path d="M 25,15 Q 15,0 5,5 Q 15,10 25,15" fill="#7A4E2A"/>
+          <!-- Wing down -->
+          <path d="M 35,15 Q 45,0 55,5 Q 45,10 35,15" fill="#7A4E2A"/>
+          <!-- Head -->
+          <ellipse cx="45" cy="15" rx="7" ry="6" fill="#4A2E14"/>
+          <!-- Beak -->
+          <polygon points="52,14 58,15 52,16" fill="#DAA520"/>
+          <!-- Eye -->
+          <circle cx="47" cy="13" r="1.5" fill="#FFD700"/>
+          <circle cx="47" cy="13" r="0.7" fill="black"/>
+        </svg>
+      </div>
+
+      <!-- Snowflakes -->
+      <div style="position:absolute; left:15%; top:15%; color:white; font-size:8px; opacity:0.7;">&#10052;</div>
+      <div style="position:absolute; left:45%; top:25%; color:white; font-size:6px; opacity:0.5;">&#10052;</div>
+      <div style="position:absolute; left:75%; top:10%; color:white; font-size:10px; opacity:0.6;">&#10052;</div>
+      <div style="position:absolute; left:85%; top:35%; color:white; font-size:7px; opacity:0.4;">&#10052;</div>
+      <div style="position:absolute; left:25%; top:40%; color:white; font-size:5px; opacity:0.5;">&#10052;</div>
+
+      <!-- Score -->
+      <div style="position:absolute; top:15px; left:50%; transform:translateX(-50%); font-size:36px; font-weight:bold; color:white; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); font-family: sans-serif;">7</div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Key Elements</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Player</p>
+      <p>A hawk with animated wing flapping — tilts up when flapping, angles down when falling</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Obstacles</p>
+      <p>Snow-capped rock pillars forming gaps in mountain passes (replaces green pipes)</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Background</p>
+      <p>Parallax layers: sky → far mountains → near mountains → pine trees → snowy ground</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Atmosphere</p>
+      <p>Falling snowflakes, wind sounds, eagle cries, ambient mountain audio</p>
+    </div>
+  </div>
+</div>

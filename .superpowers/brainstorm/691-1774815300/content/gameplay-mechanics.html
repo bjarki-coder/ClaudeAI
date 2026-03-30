@@ -1,0 +1,103 @@
+<h2>Mountain Hawk — Gameplay Mechanics</h2>
+<p class="subtitle">Physics, controls, scoring, and game states</p>
+
+<div class="section">
+  <h3>Physics & Controls</h3>
+  <div class="mockup">
+    <div class="mockup-header">Flight Physics</div>
+    <div class="mockup-body" style="background: linear-gradient(180deg, #87CEEB 0%, #B0C4DE 50%, #E8E8E8 100%); height: 280px; position: relative; overflow: hidden; font-family: sans-serif;">
+
+      <!-- Hawk falling -->
+      <div style="position:absolute; left:15%; top:25%;">
+        <svg viewBox="0 0 50 25" width="50" height="25" style="transform: rotate(15deg); opacity: 0.4;">
+          <ellipse cx="25" cy="15" rx="15" ry="6" fill="#5C3A1E"/>
+          <path d="M 20,12 Q 12,18 5,22 Q 12,14 20,12" fill="#7A4E2A"/>
+          <path d="M 30,12 Q 38,18 45,22 Q 38,14 30,12" fill="#7A4E2A"/>
+          <ellipse cx="38" cy="12" rx="6" ry="5" fill="#4A2E14"/>
+          <polygon points="44,11 49,12 44,13" fill="#DAA520"/>
+        </svg>
+        <div style="color: #cc4444; font-size: 11px; margin-top: 4px; font-weight: bold;">Falling — wings tucked, nose down</div>
+      </div>
+
+      <!-- Arrow down -->
+      <svg style="position:absolute; left:18%; top:48%;" width="20" height="40" viewBox="0 0 20 40">
+        <line x1="10" y1="0" x2="10" y2="30" stroke="#cc4444" stroke-width="2" stroke-dasharray="4,3"/>
+        <polygon points="5,28 10,38 15,28" fill="#cc4444"/>
+      </svg>
+
+      <!-- FLAP label -->
+      <div style="position:absolute; left:45%; top:50%; background: rgba(255,255,255,0.9); color: #333; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+        CLICK / SPACE / TAP → Flap!
+      </div>
+
+      <!-- Hawk flapping -->
+      <div style="position:absolute; right:18%; top:20%;">
+        <svg viewBox="0 0 50 25" width="50" height="25" style="transform: rotate(-15deg); opacity: 1;">
+          <ellipse cx="25" cy="15" rx="15" ry="6" fill="#5C3A1E"/>
+          <path d="M 20,12 Q 10,0 3,2 Q 12,8 20,12" fill="#7A4E2A"/>
+          <path d="M 30,12 Q 40,0 47,2 Q 38,8 30,12" fill="#7A4E2A"/>
+          <ellipse cx="38" cy="12" rx="6" ry="5" fill="#4A2E14"/>
+          <polygon points="44,11 49,12 44,13" fill="#DAA520"/>
+          <circle cx="40" cy="10" r="1.2" fill="#FFD700"/>
+        </svg>
+        <div style="color: #22aa44; font-size: 11px; margin-top: 4px; font-weight: bold;">Flapping — wings spread, nose up</div>
+      </div>
+
+      <!-- Arrow up -->
+      <svg style="position:absolute; right:20%; top:44%;" width="20" height="40" viewBox="0 0 20 40">
+        <polygon points="5,12 10,2 15,12" fill="#22aa44"/>
+        <line x1="10" y1="10" x2="10" y2="40" stroke="#22aa44" stroke-width="2" stroke-dasharray="4,3"/>
+      </svg>
+
+      <!-- Gravity label -->
+      <div style="position:absolute; left:15%; bottom:15px; font-size: 11px; color: #555; background: rgba(255,255,255,0.7); padding: 4px 8px; border-radius: 4px;">
+        Gravity: constant downward pull
+      </div>
+
+      <!-- Velocity label -->
+      <div style="position:absolute; right:15%; bottom:15px; font-size: 11px; color: #555; background: rgba(255,255,255,0.7); padding: 4px 8px; border-radius: 4px;">
+        Flap: instant upward velocity boost
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Game States</h3>
+  <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 180px; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 2px solid #4488cc; text-align: center;">
+      <p class="label" style="color: #4488cc;">1. Title Screen</p>
+      <p style="font-size: 13px;">Game title, hawk gently bobbing, "Click to Start" prompt. Wind audio playing.</p>
+    </div>
+    <div style="flex: 1; min-width: 180px; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 2px solid #44aa44; text-align: center;">
+      <p class="label" style="color: #44aa44;">2. Playing</p>
+      <p style="font-size: 13px;">Hawk flies, obstacles scroll, score increments on each pass. Full audio.</p>
+    </div>
+    <div style="flex: 1; min-width: 180px; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 2px solid #cc4444; text-align: center;">
+      <p class="label" style="color: #cc4444;">3. Game Over</p>
+      <p style="font-size: 13px;">Hawk tumbles, screen flash, final score + best score shown. "Click to Retry".</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Scoring & Difficulty</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Scoring</p>
+      <p style="font-size: 13px;">+1 point for each rock pillar passed. Best score saved to localStorage.</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Difficulty</p>
+      <p style="font-size: 13px;">Classic Flappy Bird tuning — consistent gap size and speed. Tight but fair.</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Collision</p>
+      <p style="font-size: 13px;">Bounding box on hawk vs rock pillars and ground/ceiling. Instant death on hit.</p>
+    </div>
+    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p class="label">Controls</p>
+      <p style="font-size: 13px;">Click, spacebar, or tap (mobile) — all trigger a flap. Simple and universal.</p>
+    </div>
+  </div>
+</div>
