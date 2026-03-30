@@ -68,6 +68,11 @@ function updateCamera(targetX, targetY) {
 // ============================================================
 // GAME STATE
 // ============================================================
+const STATE_PLAYING = 0;
+const STATE_DEAD = 1;
+const STATE_SHOP = 2;
+let gameState = STATE_PLAYING;
+let coinsThisRun = 0;
 let lastTime = 0;
 let accumulator = 0;
 
@@ -263,10 +268,52 @@ document.addEventListener('keydown', (e) => {
   }
 });
 document.addEventListener('keyup', (e) => { keysDown[e.code] = false; });
-canvas.addEventListener('mousedown', (e) => { e.preventDefault(); mouseDown = true; mouseHoldTime = 0; });
+canvas.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  if (gameState === STATE_DEAD) {
+    const pos = getClickPos(e);
+    const panelW = 260;
+    const panelH = 200;
+    const panelY = (CANVAS_H - panelH) / 2 - 20;
+    const btnW = 180;
+    const btnX = (CANVAS_W - btnW) / 2;
+    if (hitBtn(pos, btnX, panelY + 105, btnW, 32)) { respawnPlayer(); return; }
+    if (hitBtn(pos, btnX, panelY + 145, btnW, 32)) { gameState = STATE_SHOP; return; }
+    return;
+  }
+  mouseDown = true; mouseHoldTime = 0;
+});
 canvas.addEventListener('mouseup', (e) => { mouseDown = false; mouseHoldTime = 0; });
-canvas.addEventListener('touchstart', (e) => { e.preventDefault(); mouseDown = true; mouseHoldTime = 0; });
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (gameState === STATE_DEAD) {
+    const pos = getClickPos(e);
+    const panelW = 260;
+    const panelH = 200;
+    const panelY = (CANVAS_H - panelH) / 2 - 20;
+    const btnW = 180;
+    const btnX = (CANVAS_W - btnW) / 2;
+    if (hitBtn(pos, btnX, panelY + 105, btnW, 32)) { respawnPlayer(); return; }
+    if (hitBtn(pos, btnX, panelY + 145, btnW, 32)) { gameState = STATE_SHOP; return; }
+    return;
+  }
+  mouseDown = true; mouseHoldTime = 0;
+});
 canvas.addEventListener('touchend', (e) => { mouseDown = false; mouseHoldTime = 0; });
+
+function getClickPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = CANVAS_W / rect.width;
+  const scaleY = CANVAS_H / rect.height;
+  if (e.touches) {
+    return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
+  }
+  return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+}
+
+function hitBtn(pos, bx, by, bw, bh) {
+  return pos.x >= bx && pos.x <= bx + bw && pos.y >= by && pos.y <= by + bh;
+}
 
 function updatePlayerInput() {
   if (!player.alive) return;
@@ -925,6 +972,7 @@ function updateBiteCollision() {
             dropMeat(e.x, e.y, e.meatCount, e.size);
           } else {
             player.coins += e.coins;
+            coinsThisRun += e.coins;
             player.biteForce += e.bfGain;
             player.maxHealth += e.hpGain;
             player.health = Math.min(player.health + e.hpGain, player.maxHealth);
@@ -954,6 +1002,7 @@ function updateEnemyDamage() {
       if (player.health <= 0) {
         player.health = 0;
         player.alive = false;
+        gameState = STATE_DEAD;
       }
     }
   }
@@ -1070,6 +1119,77 @@ function drawHUD() {
   ctx.restore();
 }
 
+function drawDeathMenu() {
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  const panelW = 260;
+  const panelH = 200;
+  const panelX = (CANVAS_W - panelW) / 2;
+  const panelY = (CANVAS_H - panelH) / 2 - 20;
+
+  ctx.fillStyle = 'rgba(20,30,50,0.9)';
+  ctx.beginPath();
+  ctx.roundRect(panelX, panelY, panelW, panelH, 12);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.save();
+  ctx.textAlign = 'center';
+
+  ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = '#CC4444';
+  ctx.fillText('You Got Eaten!', CANVAS_W / 2, panelY + 35);
+
+  ctx.font = '14px sans-serif';
+  ctx.fillStyle = '#FFD700';
+  ctx.fillText('Coins earned: ' + coinsThisRun, CANVAS_W / 2, panelY + 65);
+
+  ctx.font = '13px sans-serif';
+  ctx.fillStyle = '#AAAAAA';
+  ctx.fillText('Total: ' + player.coins + ' coins', CANVAS_W / 2, panelY + 85);
+
+  const btnW = 180;
+  const btnH = 32;
+  const btnX = (CANVAS_W - btnW) / 2;
+
+  ctx.fillStyle = '#44AA44';
+  ctx.beginPath();
+  ctx.roundRect(btnX, panelY + 105, btnW, btnH, 6);
+  ctx.fill();
+  ctx.font = 'bold 16px sans-serif';
+  ctx.fillStyle = 'white';
+  ctx.fillText('Retry', CANVAS_W / 2, panelY + 127);
+
+  ctx.fillStyle = '#AA8844';
+  ctx.beginPath();
+  ctx.roundRect(btnX, panelY + 145, btnW, btnH, 6);
+  ctx.fill();
+  ctx.font = 'bold 16px sans-serif';
+  ctx.fillStyle = 'white';
+  ctx.fillText('Shop', CANVAS_W / 2, panelY + 167);
+
+  ctx.restore();
+}
+
+function respawnPlayer() {
+  player.x = 300;
+  player.y = 400;
+  player.size = 1.0;
+  player.biteForce = 10;
+  player.maxHealth = 100;
+  player.health = 100;
+  player.alive = true;
+  player.sprinting = false;
+  player.staminaLeft = SPRINT_MAX;
+  coinsThisRun = 0;
+  gameState = STATE_PLAYING;
+  initEntities();
+  initFamily();
+}
+
 // ============================================================
 // GAME LOOP
 // ============================================================
@@ -1080,13 +1200,15 @@ function gameLoop(timestamp) {
 
   while (accumulator >= FIXED_DT) {
     accumulator -= FIXED_DT;
-    updatePlayerInput();
-    updatePlayer();
-    updateFamily();
-    updateEntities();
-    updateBiteCollision();
-    updateEnemyDamage();
-    updateCamera(player.x, player.y);
+    if (gameState === STATE_PLAYING) {
+      updatePlayerInput();
+      updatePlayer();
+      updateFamily();
+      updateEntities();
+      updateBiteCollision();
+      updateEnemyDamage();
+      updateCamera(player.x, player.y);
+    }
   }
 
   // Draw
@@ -1121,7 +1243,11 @@ function gameLoop(timestamp) {
 
   drawPiranha(player.x - camX, player.y - camY, player.size, player.facingRight, player.swimTimer, 'normal', player.biting, player.biteCharged, player.canHitSomething);
 
-  drawHUD();
+  if (gameState === STATE_DEAD) {
+    drawDeathMenu();
+  } else if (gameState === STATE_PLAYING) {
+    drawHUD();
+  }
 
   requestAnimationFrame(gameLoop);
 }
