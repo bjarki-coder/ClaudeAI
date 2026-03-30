@@ -1267,7 +1267,7 @@ function worldToScene(wx, wy, wz) {
 // ============================================================
 const camTarget = new THREE.Vector3();
 const camPos = new THREE.Vector3();
-const CAM_DISTANCE = 200; // distance behind player
+const CAM_DISTANCE = 350; // distance behind player
 
 function updateCamera3D() {
   const pos = worldToScene(player.x, player.y, player.z);
@@ -1276,16 +1276,16 @@ function updateCamera3D() {
     // Mouse-look camera: positioned behind player based on yaw/pitch
     const behindX = -Math.sin(playerYaw) * CAM_DISTANCE;
     const behindZ = -Math.cos(playerYaw) * CAM_DISTANCE;
-    const behindY = Math.sin(playerPitch) * CAM_DISTANCE * 0.5 + 80;
+    const behindY = Math.sin(playerPitch) * CAM_DISTANCE * 0.3 + 100;
 
     const desiredX = pos.x + behindX;
     const desiredY = pos.y + behindY;
     const desiredZ = pos.z + behindZ;
 
     // Smooth follow
-    camPos.x += (desiredX - camPos.x) * 0.1;
-    camPos.y += (desiredY - camPos.y) * 0.1;
-    camPos.z += (desiredZ - camPos.z) * 0.1;
+    camPos.x += (desiredX - camPos.x) * 0.08;
+    camPos.y += (desiredY - camPos.y) * 0.08;
+    camPos.z += (desiredZ - camPos.z) * 0.08;
 
     camera.position.copy(camPos);
 
@@ -2476,14 +2476,13 @@ function syncMeshes() {
     playerMesh.position.set(pos.x, pos.y, pos.z);
     playerMesh.scale.set(player.size, player.size, player.size);
     if (pointerLocked) {
-      // Smoothly face the full look direction (yaw + pitch)
-      const targetY = playerYaw + Math.PI / 2;
-      playerMesh.rotation.y += (targetY - playerMesh.rotation.y) * 0.15;
-      playerMesh.rotation.x = -playerPitch * 0.6; // tilt up/down with look
-      playerMesh.rotation.z = 0;
+      // Fish faces exactly where you're looking (away from camera)
+      playerMesh.rotation.set(0, 0, 0);
+      playerMesh.rotation.y = playerYaw + Math.PI / 2;
+      playerMesh.rotation.x = -playerPitch * 0.5;
     } else {
+      playerMesh.rotation.set(0, 0, 0);
       playerMesh.rotation.y = player.facingRight ? 0 : Math.PI;
-      playerMesh.rotation.x = 0;
     }
 
     // Tail wag
