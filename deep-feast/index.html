@@ -1510,54 +1510,19 @@ function updatePlayerInput() {
   player.vx = 0;
   player.vy = 0;
 
-  if (pointerLocked) {
-    // Mouse-look mode: WASD moves relative to look direction
-    // Forward direction from yaw (in game world: x is horizontal, y is vertical)
-    const forwardX = Math.sin(playerYaw);
-    const forwardY = -Math.sin(playerPitch); // looking up = move up (negative y in game coords)
-    // Right direction (perpendicular to forward in the horizontal plane)
-    const rightX = Math.cos(playerYaw);
+  // WASD always moves in world directions — camera is mouse-only
+  if (keysDown['ArrowLeft'] || keysDown['KeyA']) player.vx = -speed;
+  if (keysDown['ArrowRight'] || keysDown['KeyD']) player.vx = speed;
+  if (keysDown['ArrowUp'] || keysDown['KeyW']) player.vy = -speed;
+  if (keysDown['ArrowDown'] || keysDown['KeyS']) player.vy = speed;
 
-    let moveForward = 0;
-    let moveRight = 0;
-    let moveVertical = 0;
-
-    if (keysDown['KeyW'] || keysDown['ArrowUp']) moveForward += 1;
-    if (keysDown['KeyS'] || keysDown['ArrowDown']) moveForward -= 1;
-    if (keysDown['KeyA'] || keysDown['ArrowLeft']) moveRight -= 1;
-    if (keysDown['KeyD'] || keysDown['ArrowRight']) moveRight += 1;
-
-    // Combine directions
-    player.vx = (forwardX * moveForward + rightX * moveRight) * speed;
-    player.vy = (forwardY * moveForward) * speed;
-    // Also allow vertical from W/S based on pitch
-    if (moveRight !== 0 || moveForward !== 0) {
-      // Normalize if diagonal
-      const len = Math.sqrt(player.vx * player.vx + player.vy * player.vy);
-      if (len > speed) {
-        player.vx = (player.vx / len) * speed;
-        player.vy = (player.vy / len) * speed;
-      }
-    }
-
-    // Player faces the look direction (stored as yaw for smooth 3D rotation)
-    player.facingYaw = playerYaw;
-    player.facingPitch = playerPitch;
-  } else {
-    // Classic mode: WASD cardinal directions
-    if (keysDown['ArrowLeft'] || keysDown['KeyA']) player.vx = -speed;
-    if (keysDown['ArrowRight'] || keysDown['KeyD']) player.vx = speed;
-    if (keysDown['ArrowUp'] || keysDown['KeyW']) player.vy = -speed;
-    if (keysDown['ArrowDown'] || keysDown['KeyS']) player.vy = speed;
-
-    if (player.vx !== 0 && player.vy !== 0) {
-      player.vx *= 0.707;
-      player.vy *= 0.707;
-    }
-
-    if (player.vx > 0) player.facingRight = true;
-    if (player.vx < 0) player.facingRight = false;
+  if (player.vx !== 0 && player.vy !== 0) {
+    player.vx *= 0.707;
+    player.vy *= 0.707;
   }
+
+  if (player.vx > 0) player.facingRight = true;
+  if (player.vx < 0) player.facingRight = false;
 
   if (player.sprinting && player.staminaLeft > 0) {
     player.staminaLeft -= FIXED_DT;
