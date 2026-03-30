@@ -954,6 +954,7 @@ let familyActive = true;
 
 function initFamily() {
   family = [];
+  if (selectedFish !== 0) return; // only piranha gets family
   const s = player.size;
   for (let i = 0; i < 4; i++) {
     family.push({ role: 'brother', x: player.x - 40 - i * 25, y: player.y + (i - 1.5) * 20, size: s, speedMult: 1.6, swimTimer: Math.random() * 5 });
@@ -1017,7 +1018,7 @@ function spawnOrca(x, y) {
     coins: 30, bfGain: 5, hpGain: 8, sizeGain: 0.03,
     turnTimer: Math.random() * 5,
     swimTimer: 0, meatCount: 5,
-    aggroRange: 300, damage: 20,
+    aggroRange: 120, damage: 20,
     respawnTime: 60, respawnX: x, respawnY: y
   });
 }
@@ -1043,7 +1044,7 @@ function spawnMegalodon(x, y) {
     coins: 80, bfGain: 5, hpGain: 8, sizeGain: 0.05,
     turnTimer: Math.random() * 5,
     swimTimer: 0, meatCount: 5,
-    aggroRange: 500, damage: 40,
+    aggroRange: 150, damage: 40,
     respawnTime: 120, respawnX: x, respawnY: y
   });
 }
@@ -1056,7 +1057,7 @@ function spawnMosasaurus(x, y) {
     coins: 150, bfGain: 5, hpGain: 8, sizeGain: 0.08,
     turnTimer: Math.random() * 5,
     swimTimer: 0, meatCount: 5,
-    aggroRange: 600, damage: 60,
+    aggroRange: 180, damage: 60,
     respawnTime: 180, respawnX: x, respawnY: y
   });
 }
@@ -1367,7 +1368,7 @@ function updateEntities() {
       const dx = player.x - e.x;
       const dy = player.y - e.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 200) {
+      if (dist < 100) {
         if (player.size > e.size * 1.3) {
           e.vx += (e.x - player.x) * 0.005;
           e.vy += (e.y - player.y) * 0.005;
