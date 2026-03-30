@@ -217,6 +217,21 @@ function spawnMosasaurus(x, y) {
   });
 }
 
+// ============================================================
+// SHOP
+// ============================================================
+const SHOP_FISH = [
+  { name: 'Piranha', cost: 0, requireKill: null, skins: ['normal', 'skeleton'] },
+  { name: 'Bass', cost: 50, requireKill: null, skins: ['normal'] },
+  { name: 'Whale', cost: 150, requireKill: null, skins: ['normal'], special: 'suck' },
+  { name: 'Megalodon', cost: 200, requireKill: 'deepFeastMegaKill', skins: ['normal'] },
+  { name: 'Mosasaurus', cost: 500, requireKill: 'deepFeastMosaKill', skins: ['normal'] }
+];
+
+let selectedFish = parseInt(localStorage.getItem('deepFeastFish')) || 0;
+let selectedSkin = parseInt(localStorage.getItem('deepFeastSkin')) || 0;
+let ownedFish = JSON.parse(localStorage.getItem('deepFeastOwned') || '[0]');
+
 function initEntities() {
   entities = [];
   for (let x = 50; x < WORLD_W; x += 80 + Math.random() * 120) {
@@ -270,6 +285,11 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => { keysDown[e.code] = false; });
 canvas.addEventListener('mousedown', (e) => {
   e.preventDefault();
+  if (gameState === STATE_SHOP) {
+    const pos = getClickPos(e);
+    handleShopClick(pos);
+    return;
+  }
   if (gameState === STATE_DEAD) {
     const pos = getClickPos(e);
     const panelW = 260;
@@ -286,6 +306,11 @@ canvas.addEventListener('mousedown', (e) => {
 canvas.addEventListener('mouseup', (e) => { mouseDown = false; mouseHoldTime = 0; });
 canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
+  if (gameState === STATE_SHOP) {
+    const pos = getClickPos(e);
+    handleShopClick(pos);
+    return;
+  }
   if (gameState === STATE_DEAD) {
     const pos = getClickPos(e);
     const panelW = 260;
@@ -1177,10 +1202,10 @@ function drawDeathMenu() {
 function respawnPlayer() {
   player.x = 300;
   player.y = 400;
-  player.size = 1.0;
-  player.biteForce = 10;
-  player.maxHealth = 100;
-  player.health = 100;
+  player.size = [1.0, 1.3, 2.5, 2.8, 3.5][selectedFish];
+  player.biteForce = [10, 15, 20, 35, 50][selectedFish];
+  player.maxHealth = [100, 150, 300, 500, 800][selectedFish];
+  player.health = player.maxHealth;
   player.alive = true;
   player.sprinting = false;
   player.staminaLeft = SPRINT_MAX;
@@ -1188,6 +1213,135 @@ function respawnPlayer() {
   gameState = STATE_PLAYING;
   initEntities();
   initFamily();
+}
+
+function drawShop() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 28px sans-serif';
+  ctx.fillStyle = 'white';
+  ctx.fillText('Fish Shop', CANVAS_W / 2, 45);
+
+  ctx.font = '14px sans-serif';
+  ctx.fillStyle = '#FFD700';
+  ctx.fillText('Coins: ' + player.coins, CANVAS_W / 2, 70);
+
+  const cardW = 250;
+  const cardH = 55;
+  const startX = (CANVAS_W - cardW) / 2;
+  const startY = 90;
+  const gap = 62;
+
+  for (let i = 0; i < SHOP_FISH.length; i++) {
+    const fish = SHOP_FISH[i];
+    const cy = startY + i * gap;
+    const owned = ownedFish.includes(i);
+    const selected = i === selectedFish;
+    const canBuy = !owned && player.coins >= fish.cost && (!fish.requireKill || localStorage.getItem(fish.requireKill));
+    const locked = !owned && fish.requireKill && !localStorage.getItem(fish.requireKill);
+
+    ctx.fillStyle = selected ? 'rgba(80,120,180,0.8)' : 'rgba(40,40,60,0.8)';
+    ctx.beginPath();
+    ctx.roundRect(startX, cy, cardW, cardH, 8);
+    ctx.fill();
+    if (selected) {
+      ctx.strokeStyle = '#88BBFF';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = locked ? '#666666' : 'white';
+    ctx.fillText(fish.name, startX + 15, cy + 22);
+
+    ctx.font = '12px sans-serif';
+    if (owned && selected) {
+      ctx.fillStyle = '#88FF88';
+      ctx.fillText('Selected', startX + 15, cy + 40);
+    } else if (owned) {
+      ctx.fillStyle = '#88AACC';
+      ctx.fillText('Owned - click to select', startX + 15, cy + 40);
+    } else if (locked) {
+      ctx.fillStyle = '#CC6666';
+      ctx.fillText('Kill one to unlock', startX + 15, cy + 40);
+    } else if (canBuy) {
+      ctx.fillStyle = '#FFD700';
+      ctx.fillText('Buy - ' + fish.cost + ' coins', startX + 15, cy + 40);
+    } else {
+      ctx.fillStyle = '#888888';
+      ctx.fillText(fish.cost + ' coins (not enough)', startX + 15, cy + 40);
+    }
+
+    if (i === 0 && owned) {
+      ctx.textAlign = 'right';
+      ctx.font = '11px sans-serif';
+      ctx.fillStyle = '#AAAAAA';
+      ctx.fillText('Skin: ' + SHOP_FISH[0].skins[selectedSkin], startX + cardW - 15, cy + 22);
+    }
+  }
+
+  ctx.textAlign = 'center';
+  const backW = 120;
+  const backH = 32;
+  const backX = (CANVAS_W - backW) / 2;
+  const backY = CANVAS_H - 60;
+  ctx.fillStyle = '#666677';
+  ctx.beginPath();
+  ctx.roundRect(backX, backY, backW, backH, 6);
+  ctx.fill();
+  ctx.font = 'bold 15px sans-serif';
+  ctx.fillStyle = 'white';
+  ctx.fillText('Back', CANVAS_W / 2, backY + 22);
+
+  ctx.restore();
+}
+
+function handleShopClick(pos) {
+  const cardW = 250;
+  const cardH = 55;
+  const startX = (CANVAS_W - cardW) / 2;
+  const startY = 90;
+  const gap = 62;
+
+  for (let i = 0; i < SHOP_FISH.length; i++) {
+    const cy = startY + i * gap;
+    if (hitBtn(pos, startX, cy, cardW, cardH)) {
+      const fish = SHOP_FISH[i];
+      const owned = ownedFish.includes(i);
+
+      if (owned) {
+        selectedFish = i;
+        localStorage.setItem('deepFeastFish', selectedFish);
+        if (i === 0) {
+          selectedSkin = (selectedSkin + 1) % SHOP_FISH[0].skins.length;
+          localStorage.setItem('deepFeastSkin', selectedSkin);
+        }
+      } else {
+        const canBuy = player.coins >= fish.cost && (!fish.requireKill || localStorage.getItem(fish.requireKill));
+        if (canBuy) {
+          player.coins -= fish.cost;
+          ownedFish.push(i);
+          selectedFish = i;
+          localStorage.setItem('deepFeastCoins', player.coins);
+          localStorage.setItem('deepFeastOwned', JSON.stringify(ownedFish));
+          localStorage.setItem('deepFeastFish', selectedFish);
+        }
+      }
+      return;
+    }
+  }
+
+  const backW = 120;
+  const backH = 32;
+  const backX = (CANVAS_W - backW) / 2;
+  const backY = CANVAS_H - 60;
+  if (hitBtn(pos, backX, backY, backW, backH)) {
+    gameState = STATE_DEAD;
+  }
 }
 
 // ============================================================
@@ -1243,7 +1397,9 @@ function gameLoop(timestamp) {
 
   drawPiranha(player.x - camX, player.y - camY, player.size, player.facingRight, player.swimTimer, 'normal', player.biting, player.biteCharged, player.canHitSomething);
 
-  if (gameState === STATE_DEAD) {
+  if (gameState === STATE_SHOP) {
+    drawShop();
+  } else if (gameState === STATE_DEAD) {
     drawDeathMenu();
   } else if (gameState === STATE_PLAYING) {
     drawHUD();
