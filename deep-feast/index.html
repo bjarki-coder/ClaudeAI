@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deep Feast</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif; }
+#container {
+  position: relative;
+  width: min(90vh, 100vw);
+  height: min(90vh, 100vh);
+}
+@media (max-width: 768px) {
+  #container { width: 100vw; height: 100vh; }
+}
+#container canvas { position: absolute; top: 0; left: 0; width: 100% !important; height: 100% !important; }
+#hud { z-index: 10; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="container"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════
+// DEEP FEAST — 3D Ocean Survival Game
+// ═══════════════════════════════════════════════════
+
+// --- Constants ---
+const WORLD_W = 4000, WORLD_D = 4000, WORLD_H = 600;
+const TURN_SPEED = 0.025, MAX_PITCH = Math.PI / 4;
+const MAX_SPEED = 2.5, SPRINT_SPEED = 5.0, STRAFE_SPEED = 1.5;
+const FIXED_DT = 1 / 60;
+const STATE_TITLE = 0, STATE_PLAYING = 1, STATE_DEAD = 2, STATE_SHOP = 3;
+
+const FISH_TYPES = [
+  { name: 'Piranha', cost: 0, startSize: 1.0, color: 0xff4400 },
+  { name: 'Bass', cost: 50, startSize: 1.5, color: 0x44aa44 },
+  { name: 'Barracuda', cost: 150, startSize: 2.0, color: 0x8888cc },
+  { name: 'Shark', cost: 300, startSize: 3.0, color: 0x888899 },
+  { name: 'Megalodon', cost: 800, startSize: 5.0, color: 0x556677 }
+];
+
+// --- State ---
+let gameState = STATE_TITLE;
+let lastTime = 0, accumulator = 0;
+let mouseX = 0.5, mouseY = 0.5;
+let keys = {};
+let hintTimer = 5;
+
+let player = {
+  x: 2000, y: 300, z: 2000,
+  yaw: 0, pitch: 0,
+  speed: 0,
+  size: 1.0,
+  health: 100, maxHealth: 100,
+  biteForce: 10,
+  coins: parseInt(localStorage.getItem('df_coins') || '0'),
+  sprinting: false, staminaLeft: 10,
+  biting: false,
+  alive: true,
+  mesh: null
+};
+
+let selectedFish = parseInt(localStorage.getItem('df_fish') || '0');
+let ownedFish = JSON.parse(localStorage.getItem('df_owned') || '[true,false,false,false,false]');
+
+let entities = [];
+let respawnQueue = [];
+let camPos = { x: 2000, y: 400, z: 1800 };
+
+// --- Audio ---
+let audioCtx = null;
+let audioInited = false;
+let ambientNode = null;
+
+function initAudio() {
+  if (audioInited) return;
+  audioInited = true;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // Ambient underwater
+  const bufSize = audioCtx.sampleRate * 2;
+  const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * 0.03;
+  ambientNode = audioCtx.createBufferSource();
+  ambientNode.buffer = buf;
+  ambientNode.loop = true;
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 400;
+  ambientNode.connect(lp);
+  lp.connect(audioCtx.destination);
+  ambientNode.start();
+}
+
+function playSound(type) {
+  if (!audioCtx) return;
+  if (type === 'bite') {
+    const dur = 0.08;
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (d.length * 0.3)) * 0.2;
+    const s = audioCtx.createBufferSource();
+    s.buffer = buf;
+    const bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 800;
+    s.connect(bp); bp.connect(audioCtx.destination);
+    s.start();
+  } else if (type === 'coin') {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine'; osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+  } else if (type === 'damage') {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine'; osc.frequency.value = 80;
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+  }
+}
+
+// --- Three.js Setup ---
+const container = document.getElementById('container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a1628);
+scene.fog = new THREE.FogExp2(0x0a2040, 0.0004);
+
+const camera = new THREE.PerspectiveCamera(65, 1, 1, 5000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+container.appendChild(renderer.domElement);
+
+const hudCanvas = document.createElement('canvas');
+hudCanvas.id = 'hud';
+container.appendChild(hudCanvas);
+const hud = hudCanvas.getContext('2d');
+
+const ambient = new THREE.AmbientLight(0x446688, 0.6);
+scene.add(ambient);
+const dirLight = new THREE.DirectionalLight(0xaaccff, 0.8);
+dirLight.position.set(500, 800, 500);
+scene.add(dirLight);
+
+function handleResize() {
+  const w = container.clientWidth, h = container.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  hudCanvas.width = w;
+  hudCanvas.height = h;
+}
+handleResize();
+window.addEventListener('resize', handleResize);
+
+// --- Build Environment ---
+function buildEnvironment() {
+  // Ocean floor
+  const floorGeo = new THREE.PlaneGeometry(WORLD_W, WORLD_D);
+  const floorMat = new THREE.MeshLambertMaterial({ color: 0xc2a66b });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(WORLD_W / 2, 0, WORLD_D / 2);
+  scene.add(floor);
+
+  // Rocks
+  for (let i = 0; i < 20; i++) {
+    const s = 15 + Math.random() * 35;
+    const geo = new THREE.DodecahedronGeometry(s, 0);
+    const mat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(100 + Math.random() * (WORLD_W - 200), s * 0.5, 100 + Math.random() * (WORLD_D - 200));
+    m.rotation.set(Math.random(), Math.random(), Math.random());
+    scene.add(m);
+  }
+
+  // Coral
+  for (let i = 0; i < 30; i++) {
+    const colors = [0xff6699, 0xaa44cc, 0xff8833, 0x33cc66, 0xff4477];
+    const c = colors[Math.floor(Math.random() * colors.length)];
+    const mat = new THREE.MeshLambertMaterial({ color: c });
+    let geo;
+    const t = Math.floor(Math.random() * 3);
+    if (t === 0) geo = new THREE.SphereGeometry(8 + Math.random() * 12, 8, 6);
+    else if (t === 1) geo = new THREE.ConeGeometry(6 + Math.random() * 8, 15 + Math.random() * 20, 6);
+    else geo = new THREE.CylinderGeometry(4, 6 + Math.random() * 6, 12 + Math.random() * 18, 6);
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(100 + Math.random() * (WORLD_W - 200), geo.parameters.height ? geo.parameters.height * 0.5 : 8, 100 + Math.random() * (WORLD_D - 200));
+    scene.add(m);
+  }
+
+  // Seaweed
+  for (let i = 0; i < 15; i++) {
+    const h = 40 + Math.random() * 60;
+    const geo = new THREE.ConeGeometry(3, h, 5);
+    const mat = new THREE.MeshLambertMaterial({ color: 0x228833 });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(100 + Math.random() * (WORLD_W - 200), h * 0.5, 100 + Math.random() * (WORLD_D - 200));
+    m.userData.seaweed = true;
+    m.userData.baseRotZ = 0;
+    m.userData.swayOffset = Math.random() * Math.PI * 2;
+    scene.add(m);
+  }
+
+  // Light rays
+  for (let i = 0; i < 6; i++) {
+    const geo = new THREE.PlaneGeometry(20, WORLD_H);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x88bbff, transparent: true, opacity: 0.06, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(300 + Math.random() * (WORLD_W - 600), WORLD_H / 2, 300 + Math.random() * (WORLD_D - 600));
+    m.rotation.y = Math.random() * Math.PI;
+    m.userData.lightRay = true;
+    m.userData.baseOpacity = 0.06;
+    m.userData.phaseOffset = Math.random() * Math.PI * 2;
+    scene.add(m);
+  }
+
+  // Boundary walls
+  const wallMat = new THREE.MeshBasicMaterial({ color: 0x2244aa, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+  const wallH = WORLD_H, wallConfigs = [
+    { w: WORLD_W, h: wallH, px: WORLD_W / 2, py: wallH / 2, pz: 0, ry: 0 },
+    { w: WORLD_W, h: wallH, px: WORLD_W / 2, py: wallH / 2, pz: WORLD_D, ry: 0 },
+    { w: WORLD_D, h: wallH, px: 0, py: wallH / 2, pz: WORLD_D / 2, ry: Math.PI / 2 },
+    { w: WORLD_D, h: wallH, px: WORLD_W, py: wallH / 2, pz: WORLD_D / 2, ry: Math.PI / 2 }
+  ];
+  wallConfigs.forEach(wc => {
+    const g = new THREE.PlaneGeometry(wc.w, wc.h);
+    const m = new THREE.Mesh(g, wallMat);
+    m.position.set(wc.px, wc.py, wc.pz);
+    m.rotation.y = wc.ry;
+    scene.add(m);
+  });
+}
+
+// --- Fish Mesh Creation ---
+function createFishMesh(size, color, isShark) {
+  const group = new THREE.Group();
+
+  // Body - oval sphere
+  const bodyLen = 12 * size;
+  const bodyH = 5 * size;
+  const bodyGeo = new THREE.SphereGeometry(1, 10, 8);
+  const bodyMat = new THREE.MeshLambertMaterial({ color: color });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.scale.set(bodyLen, bodyH, bodyH);
+  group.add(body);
+
+  // Tail
+  const tailSize = 6 * size;
+  const tailGeo = new THREE.ConeGeometry(tailSize, tailSize * 1.5, 4);
+  const tail = new THREE.Mesh(tailGeo, bodyMat);
+  tail.rotation.z = Math.PI / 2;
+  tail.position.x = -bodyLen - tailSize * 0.4;
+  tail.name = 'tail';
+  group.add(tail);
+
+  // Dorsal fin
+  const finGeo = new THREE.ConeGeometry(3 * size, 6 * size, 3);
+  const fin = new THREE.Mesh(finGeo, bodyMat);
+  fin.position.set(-bodyLen * 0.1, bodyH + 2 * size, 0);
+  group.add(fin);
+
+  // Eyes
+  const eyeSize = 1.5 * size;
+  const eyeWhiteGeo = new THREE.SphereGeometry(eyeSize, 6, 6);
+  const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const pupilGeo = new THREE.SphereGeometry(eyeSize * 0.5, 6, 6);
+  const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+  [-1, 1].forEach(side => {
+    const eye = new THREE.Mesh(eyeWhiteGeo, eyeWhiteMat);
+    eye.position.set(bodyLen * 0.6, bodyH * 0.3, side * bodyH * 0.9);
+    group.add(eye);
+    const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+    pupil.position.set(bodyLen * 0.6 + eyeSize * 0.4, bodyH * 0.3, side * (bodyH * 0.9 + eyeSize * 0.3));
+    group.add(pupil);
+  });
+
+  // For shark, add wider body shape via nose cone
+  if (isShark) {
+    const noseGeo = new THREE.ConeGeometry(bodyH * 0.8, bodyLen * 0.5, 8);
+    const nose = new THREE.Mesh(noseGeo, bodyMat);
+    nose.rotation.z = -Math.PI / 2;
+    nose.position.x = bodyLen + bodyLen * 0.2;
+    group.add(nose);
+  }
+
+  return group;
+}
+
+function createPlayerMesh() {
+  if (player.mesh) {
+    scene.remove(player.mesh);
+    // Dispose old mesh children
+    player.mesh.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); });
+  }
+  const ft = FISH_TYPES[selectedFish];
+  const isShark = selectedFish >= 3;
+  player.mesh = createFishMesh(player.size, ft.color, isShark);
+  scene.add(player.mesh);
+
+  // Bite indicator (hidden by default)
+  const biteGeo = new THREE.TorusGeometry(8 * player.size, 1.5 * player.size, 6, 12);
+  const biteMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 });
+  const biteRing = new THREE.Mesh(biteGeo, biteMat);
+  biteRing.name = 'biteRing';
+  biteRing.visible = false;
+  biteRing.position.x = 18 * player.size;
+  biteRing.rotation.y = Math.PI / 2;
+  player.mesh.add(biteRing);
+}
+
+// --- Plankton Mesh ---
+function createPlanktonMesh(size) {
+  const geo = new THREE.SphereGeometry(2 * size, 4, 4);
+  const mat = new THREE.MeshBasicMaterial({ color: 0x66ff66 });
+  return new THREE.Mesh(geo, mat);
+}
+
+// --- Entity Spawning ---
+function spawnEntity(type) {
+  let e = {
+    type: type,
+    x: 50 + Math.random() * (WORLD_W - 100),
+    y: 20 + Math.random() * 530,
+    z: 50 + Math.random() * (WORLD_D - 100),
+    yaw: Math.random() * Math.PI * 2,
+    targetYaw: Math.random() * Math.PI * 2,
+    targetY: 20 + Math.random() * 530,
+    moveSpeed: 0,
+    baseSpeed: 0,
+    size: 0,
+    health: 0,
+    maxHealth: 0,
+    coins: 0,
+    mesh: null,
+    swimTimer: 0,
+    wanderTimer: Math.random() * 3,
+    growthValue: 0
+  };
+
+  if (type === 'plankton') {
+    e.size = 0.2;
+    e.baseSpeed = 0;
+    e.moveSpeed = 0;
+    e.health = 1; e.maxHealth = 1;
+    e.coins = 1;
+    e.growthValue = 0.003;
+    e.mesh = createPlanktonMesh(e.size);
+  } else if (type === 'small') {
+    e.size = 0.4 + Math.random() * 0.2;
+    e.baseSpeed = 0.6;
+    e.moveSpeed = 0.6;
+    e.health = 5; e.maxHealth = 5;
+    e.coins = 3;
+    e.growthValue = 0.008;
+    e.mesh = createFishMesh(e.size, 0x44cc88, false);
+  } else if (type === 'medium') {
+    e.size = 0.8 + Math.random() * 0.4;
+    e.baseSpeed = 0.8;
+    e.moveSpeed = 0.8;
+    e.health = 20; e.maxHealth = 20;
+    e.coins = 8;
+    e.growthValue = 0.015;
+    e.mesh = createFishMesh(e.size, 0x4488cc, false);
+  } else if (type === 'large') {
+    e.size = 1.5 + Math.random() * 1.0;
+    e.baseSpeed = 0.7;
+    e.moveSpeed = 0.7;
+    e.health = 50; e.maxHealth = 50;
+    e.coins = 20;
+    e.growthValue = 0.025;
+    e.mesh = createFishMesh(e.size, 0x9944cc, false);
+  } else if (type === 'shark') {
+    e.size = 3.5;
+    e.baseSpeed = 1.2;
+    e.moveSpeed = 1.2;
+    e.health = 100; e.maxHealth = 100;
+    e.coins = 50;
+    e.growthValue = 0.04;
+    e.mesh = createFishMesh(e.size, 0x778899, true);
+  }
+
+  scene.add(e.mesh);
+  entities.push(e);
+}
+
+function spawnAllEntities() {
+  for (let i = 0; i < 100; i++) spawnEntity('plankton');
+  for (let i = 0; i < 30; i++) spawnEntity('small');
+  for (let i = 0; i < 15; i++) spawnEntity('medium');
+  for (let i = 0; i < 8; i++) spawnEntity('large');
+  for (let i = 0; i < 3; i++) spawnEntity('shark');
+}
+
+function removeEntity(idx) {
+  const e = entities[idx];
+  if (e.mesh) {
+    scene.remove(e.mesh);
+    e.mesh.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); });
+  }
+  entities.splice(idx, 1);
+}
+
+function clearAllEntities() {
+  while (entities.length > 0) removeEntity(0);
+  respawnQueue = [];
+}
+
+// --- Game Update Functions ---
+function updateSteering() {
+  const turnX = (mouseX - 0.5) * 2;
+  const turnY = (mouseY - 0.5) * 2;
+  player.yaw -= turnX * TURN_SPEED;
+  const targetPitch = turnY * MAX_PITCH;
+  player.pitch += (targetPitch - player.pitch) * 0.05;
+}
+
+function updatePlayerMovement() {
+  if (!player.alive) return;
+
+  // Sprint
+  if (keys['ShiftLeft'] || keys['ShiftRight']) {
+    if (player.staminaLeft > 0) {
+      player.sprinting = true;
+      player.staminaLeft -= FIXED_DT;
+      if (player.staminaLeft < 0) player.staminaLeft = 0;
+    } else {
+      player.sprinting = false;
+    }
+  } else {
+    player.sprinting = false;
+    player.staminaLeft = Math.min(10, player.staminaLeft + FIXED_DT * 0.5);
+  }
+
+  const topSpeed = player.sprinting ? SPRINT_SPEED : MAX_SPEED;
+
+  // Forward / backward
+  if (keys['KeyW']) {
+    player.speed += (topSpeed - player.speed) * 0.08;
+  } else if (keys['KeyS']) {
+    player.speed += (-topSpeed * 0.5 - player.speed) * 0.08;
+  } else {
+    player.speed *= 0.95;
+    if (Math.abs(player.speed) < 0.01) player.speed = 0;
+  }
+
+  // Apply forward movement
+  const sinY = Math.sin(player.yaw);
+  const cosY = Math.cos(player.yaw);
+  player.x += sinY * player.speed;
+  player.z += cosY * player.speed;
+  if (Math.abs(player.speed) > 0.1) {
+    player.y -= Math.sin(player.pitch) * player.speed;
+  }
+
+  // Strafe
+  if (keys['KeyA']) {
+    player.x -= cosY * STRAFE_SPEED;
+    player.z += sinY * STRAFE_SPEED;
+  }
+  if (keys['KeyD']) {
+    player.x += cosY * STRAFE_SPEED;
+    player.z -= sinY * STRAFE_SPEED;
+  }
+
+  // Vertical
+  if (keys['Space']) player.y += 2;
+  if (keys['KeyC']) player.y -= 2;
+
+  // Clamp
+  player.x = Math.max(30, Math.min(WORLD_W - 30, player.x));
+  player.z = Math.max(30, Math.min(WORLD_D - 30, player.z));
+  player.y = Math.max(10, Math.min(WORLD_H - 10, player.y));
+}
+
+function updateEntityAI(e) {
+  if (e.type === 'plankton') {
+    // Gentle float
+    e.y += Math.sin(e.swimTimer * 0.5) * 0.05;
+    e.y = Math.max(20, Math.min(550, e.y));
+    e.swimTimer += FIXED_DT;
+    return;
+  }
+
+  e.swimTimer += FIXED_DT;
+
+  // Wander
+  e.wanderTimer -= FIXED_DT;
+  if (e.wanderTimer <= 0) {
+    e.targetYaw = Math.random() * Math.PI * 2;
+    e.targetY = 30 + Math.random() * 500;
+    e.wanderTimer = 3 + Math.random() * 5;
+  }
+
+  // Turn toward target
+  let dy = e.targetYaw - e.yaw;
+  while (dy > Math.PI) dy -= Math.PI * 2;
+  while (dy < -Math.PI) dy += Math.PI * 2;
+  e.yaw += dy * 0.02;
+
+  // Check player distance
+  if (player.alive) {
+    const dx = player.x - e.x;
+    const dz = player.z - e.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+
+    if (dist < 200) {
+      if (player.size > e.size * 1.3) {
+        // Flee from player
+        e.targetYaw = Math.atan2(-dx, -dz);
+        e.moveSpeed = e.baseSpeed * 1.5;
+      } else if (e.size > player.size * 1.3) {
+        // Chase player
+        e.targetYaw = Math.atan2(dx, dz);
+        e.moveSpeed = e.baseSpeed * 1.3;
+      } else {
+        e.moveSpeed = e.baseSpeed;
+      }
+    } else {
+      e.moveSpeed = e.baseSpeed;
+    }
+  } else {
+    e.moveSpeed = e.baseSpeed;
+  }
+
+  // Move forward
+  e.x += Math.sin(e.yaw) * e.moveSpeed;
+  e.z += Math.cos(e.yaw) * e.moveSpeed;
+  e.y += (e.targetY - e.y) * 0.01;
+
+  // Clamp to world
+  e.x = Math.max(50, Math.min(WORLD_W - 50, e.x));
+  e.z = Math.max(50, Math.min(WORLD_D - 50, e.z));
+  e.y = Math.max(20, Math.min(550, e.y));
+}
+
+function updateEntities() {
+  for (let i = 0; i < entities.length; i++) {
+    updateEntityAI(entities[i]);
+  }
+
+  // Process respawn queue
+  for (let i = respawnQueue.length - 1; i >= 0; i--) {
+    respawnQueue[i].timer -= FIXED_DT;
+    if (respawnQueue[i].timer <= 0) {
+      spawnEntity(respawnQueue[i].type);
+      respawnQueue.splice(i, 1);
+    }
+  }
+}
+
+function updateEating() {
+  if (!player.alive || !player.biting) return;
+
+  const biteRange = 40 * player.size;
+  const fwdX = Math.sin(player.yaw);
+  const fwdZ = Math.cos(player.yaw);
+
+  for (let i = entities.length - 1; i >= 0; i--) {
+    const e = entities[i];
+    const dx = e.x - player.x;
+    const dy = e.y - player.y;
+    const dz = e.z - player.z;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+    if (dist > biteRange) continue;
+
+    // Check if entity is in front (dot product)
+    const dot = (dx * fwdX + dz * fwdZ);
+    if (dot < 0) continue;
+
+    if (e.size < player.size * 0.9) {
+      // Eat it
+      player.size += e.growthValue;
+      player.health = Math.min(player.maxHealth, player.health + 5);
+      player.coins += e.coins;
+      player.biteForce += e.size * 0.5;
+      player.maxHealth += e.size;
+      saveCoins();
+
+      playSound('coin');
+
+      const rtype = e.type;
+      const delay = rtype === 'shark' ? 60 : (rtype === 'plankton' ? 5 : 15);
+      respawnQueue.push({ type: rtype, timer: delay });
+      removeEntity(i);
+
+      // Rebuild player mesh if size changed significantly
+      createPlayerMesh();
+    } else {
+      // Deal damage to bigger entity
+      e.health -= player.biteForce * FIXED_DT;
+      playSound('bite');
+      if (e.health <= 0) {
+        // Killed it
+        player.size += e.growthValue;
+        player.coins += e.coins;
+        player.biteForce += e.size * 0.5;
+        player.maxHealth += e.size;
+        saveCoins();
+
+        playSound('coin');
+
+        const rtype = e.type;
+        const delay = rtype === 'shark' ? 60 : 20;
+        respawnQueue.push({ type: rtype, timer: delay });
+        removeEntity(i);
+        createPlayerMesh();
+      }
+    }
+  }
+}
+
+function updateDamage() {
+  if (!player.alive) return;
+
+  for (let i = 0; i < entities.length; i++) {
+    const e = entities[i];
+    if (e.type === 'plankton') continue;
+    if (e.size <= player.size * 1.3) continue;
+
+    const dx = e.x - player.x;
+    const dy = e.y - player.y;
+    const dz = e.z - player.z;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const contactRange = (e.size + player.size) * 15;
+
+    if (dist < contactRange) {
+      player.health -= e.size * 5 * FIXED_DT;
+      playSound('damage');
+
+      if (player.health <= 0) {
+        player.health = 0;
+        player.alive = false;
+        gameState = STATE_DEAD;
+      }
+    }
+  }
+}
+
+function updateSprint() {
+  // Already handled in updatePlayerMovement
+}
+
+// --- Mesh Sync ---
+let gameTime = 0;
+
+function syncMeshes() {
+  gameTime += FIXED_DT;
+
+  // Player mesh
+  if (player.mesh) {
+    player.mesh.position.set(player.x, player.y, player.z);
+    player.mesh.rotation.y = player.yaw + Math.PI;
+    player.mesh.rotation.x = player.pitch * 0.3;
+
+    // Tail wag
+    const tail = player.mesh.getObjectByName('tail');
+    if (tail) {
+      tail.rotation.y = Math.sin(gameTime * 8) * 0.3 * (Math.abs(player.speed) / MAX_SPEED + 0.3);
+    }
+
+    // Bite ring
+    const biteRing = player.mesh.getObjectByName('biteRing');
+    if (biteRing) {
+      biteRing.visible = player.biting && player.alive;
+    }
+  }
+
+  // Entity meshes
+  for (let i = 0; i < entities.length; i++) {
+    const e = entities[i];
+    if (!e.mesh) continue;
+    e.mesh.position.set(e.x, e.y, e.z);
+    if (e.type !== 'plankton') {
+      e.mesh.rotation.y = e.yaw + Math.PI;
+      // Tail wag
+      const tail = e.mesh.getObjectByName('tail');
+      if (tail) {
+        tail.rotation.y = Math.sin(gameTime * 6 + i) * 0.25;
+      }
+    } else {
+      // Plankton gentle rotation
+      e.mesh.rotation.y = gameTime * 0.5 + i;
+    }
+  }
+
+  // Seaweed sway
+  scene.traverse(obj => {
+    if (obj.userData.seaweed) {
+      obj.rotation.z = Math.sin(gameTime * 0.8 + obj.userData.swayOffset) * 0.08;
+    }
+    if (obj.userData.lightRay) {
+      obj.material.opacity = obj.userData.baseOpacity + Math.sin(gameTime * 0.3 + obj.userData.phaseOffset) * 0.02;
+    }
+  });
+}
+
+function updateCamera() {
+  const dist = 150 + player.size * 30;
+  const heightOff = 50 + player.size * 10;
+
+  // Target camera position: behind the fish
+  const tx = player.x - Math.sin(player.yaw) * dist;
+  const ty = player.y + heightOff - Math.sin(player.pitch) * dist * 0.3;
+  const tz = player.z - Math.cos(player.yaw) * dist;
+
+  // Smooth follow
+  camPos.x += (tx - camPos.x) * 0.06;
+  camPos.y += (ty - camPos.y) * 0.06;
+  camPos.z += (tz - camPos.z) * 0.06;
+
+  // Clamp camera to world
+  camPos.x = Math.max(10, Math.min(WORLD_W - 10, camPos.x));
+  camPos.y = Math.max(10, Math.min(WORLD_H + 100, camPos.y));
+  camPos.z = Math.max(10, Math.min(WORLD_D - 10, camPos.z));
+
+  camera.position.set(camPos.x, camPos.y, camPos.z);
+  camera.lookAt(player.x, player.y, player.z);
+}
+
+// --- HUD ---
+function drawHUD() {
+  const w = hudCanvas.width, h = hudCanvas.height;
+  hud.clearRect(0, 0, w, h);
+
+  if (gameState === STATE_TITLE) {
+    drawTitleScreen(w, h);
+    return;
+  }
+
+  if (gameState === STATE_DEAD) {
+    drawDeathScreen(w, h);
+    return;
+  }
+
+  if (gameState === STATE_SHOP) {
+    drawShopScreen(w, h);
+    return;
+  }
+
+  // Playing HUD
+  const scale = Math.min(w, h) / 600;
+
+  // Coins top-left
+  hud.font = `bold ${Math.round(20 * scale)}px 'Segoe UI', sans-serif`;
+  hud.fillStyle = '#ffd700';
+  hud.textAlign = 'left';
+  hud.fillText('Coins: ' + player.coins, 15 * scale, 30 * scale);
+
+  // Sprint bar top-right
+  const barW = 120 * scale, barH = 14 * scale;
+  const barX = w - barW - 15 * scale, barY = 15 * scale;
+  hud.fillStyle = '#333';
+  hud.fillRect(barX, barY, barW, barH);
+  const staminaPct = player.staminaLeft / 10;
+  const grad = hud.createLinearGradient(barX, 0, barX + barW, 0);
+  grad.addColorStop(0, '#00ccff'); grad.addColorStop(1, '#0066ff');
+  hud.fillStyle = grad;
+  hud.fillRect(barX, barY, barW * staminaPct, barH);
+  hud.strokeStyle = '#aaa';
+  hud.strokeRect(barX, barY, barW, barH);
+  hud.font = `${Math.round(11 * scale)}px sans-serif`;
+  hud.fillStyle = '#fff';
+  hud.textAlign = 'center';
+  hud.fillText('Sprint', barX + barW / 2, barY + barH - 2 * scale);
+
+  // Health bar bottom-left
+  const hpW = 160 * scale, hpH = 16 * scale;
+  const hpX = 15 * scale, hpY = h - 60 * scale;
+  hud.fillStyle = '#333';
+  hud.fillRect(hpX, hpY, hpW, hpH);
+  const hpPct = Math.max(0, player.health / player.maxHealth);
+  const hpColor = hpPct > 0.5 ? '#22cc44' : (hpPct > 0.25 ? '#ccaa22' : '#cc2222');
+  hud.fillStyle = hpColor;
+  hud.fillRect(hpX, hpY, hpW * hpPct, hpH);
+  hud.strokeStyle = '#aaa';
+  hud.strokeRect(hpX, hpY, hpW, hpH);
+
+  hud.font = `${Math.round(13 * scale)}px sans-serif`;
+  hud.fillStyle = '#fff';
+  hud.textAlign = 'left';
+  hud.fillText('HP: ' + Math.ceil(player.health) + '/' + Math.ceil(player.maxHealth), hpX, hpY - 5 * scale);
+  hud.fillText('Bite: ' + Math.round(player.biteForce), hpX, hpY + hpH + 15 * scale);
+  hud.fillText('Size: ' + player.size.toFixed(2), hpX + 100 * scale, hpY + hpH + 15 * scale);
+
+  // Hint
+  if (hintTimer > 0) {
+    hintTimer -= 1 / 60;
+    const alpha = Math.min(1, hintTimer);
+    hud.globalAlpha = alpha;
+    hud.font = `bold ${Math.round(18 * scale)}px sans-serif`;
+    hud.fillStyle = '#fff';
+    hud.textAlign = 'center';
+    hud.fillText('HOLD LEFT CLICK TO EAT', w / 2, h / 2 + 80 * scale);
+    hud.globalAlpha = 1;
+  }
+}
+
+function drawTitleScreen(w, h) {
+  const scale = Math.min(w, h) / 600;
+
+  // Dark overlay
+  hud.fillStyle = 'rgba(5, 15, 30, 0.85)';
+  hud.fillRect(0, 0, w, h);
+
+  // Title
+  hud.textAlign = 'center';
+  hud.font = `bold ${Math.round(64 * scale)}px 'Segoe UI', sans-serif`;
+  hud.fillStyle = '#00bbff';
+  hud.fillText('DEEP FEAST', w / 2, h * 0.32);
+
+  // Subtitle
+  hud.font = `${Math.round(22 * scale)}px sans-serif`;
+  hud.fillStyle = '#88ccee';
+  hud.fillText('Eat. Grow. Survive.', w / 2, h * 0.42);
+
+  // Click to start
+  const pulse = 0.6 + Math.sin(Date.now() * 0.003) * 0.4;
+  hud.globalAlpha = pulse;
+  hud.font = `bold ${Math.round(24 * scale)}px sans-serif`;
+  hud.fillStyle = '#ffffff';
+  hud.fillText('Click to Start', w / 2, h * 0.58);
+  hud.globalAlpha = 1;
+
+  // Controls
+  hud.font = `${Math.round(13 * scale)}px sans-serif`;
+  hud.fillStyle = '#6699aa';
+  const controls = [
+    'WASD = Move | Space = Up | C = Down | Shift = Sprint',
+    'Mouse = Steer | Left Click = Bite/Eat'
+  ];
+  controls.forEach((line, i) => {
+    hud.fillText(line, w / 2, h * 0.75 + i * 22 * scale);
+  });
+}
+
+function drawDeathScreen(w, h) {
+  const scale = Math.min(w, h) / 600;
+
+  hud.fillStyle = 'rgba(30, 5, 5, 0.8)';
+  hud.fillRect(0, 0, w, h);
+
+  hud.textAlign = 'center';
+  hud.font = `bold ${Math.round(48 * scale)}px sans-serif`;
+  hud.fillStyle = '#ff3333';
+  hud.fillText('You were eaten!', w / 2, h * 0.28);
+
+  hud.font = `${Math.round(22 * scale)}px sans-serif`;
+  hud.fillStyle = '#ffd700';
+  hud.fillText('Coins: ' + player.coins, w / 2, h * 0.38);
+
+  // Buttons
+  drawButton(w / 2 - 100 * scale, h * 0.5, 80 * scale, 36 * scale, 'Retry', scale);
+  drawButton(w / 2 + 20 * scale, h * 0.5, 80 * scale, 36 * scale, 'Shop', scale);
+}
+
+function drawShopScreen(w, h) {
+  const scale = Math.min(w, h) / 600;
+
+  hud.fillStyle = 'rgba(5, 15, 30, 0.9)';
+  hud.fillRect(0, 0, w, h);
+
+  hud.textAlign = 'center';
+  hud.font = `bold ${Math.round(36 * scale)}px sans-serif`;
+  hud.fillStyle = '#00bbff';
+  hud.fillText('Fish Shop', w / 2, h * 0.12);
+
+  hud.font = `${Math.round(16 * scale)}px sans-serif`;
+  hud.fillStyle = '#ffd700';
+  hud.fillText('Your Coins: ' + player.coins, w / 2, h * 0.19);
+
+  const startY = h * 0.25;
+  const rowH = 50 * scale;
+
+  for (let i = 0; i < FISH_TYPES.length; i++) {
+    const ft = FISH_TYPES[i];
+    const rowY = startY + i * rowH;
+    const isOwned = ownedFish[i];
+    const isSelected = selectedFish === i;
+    const canBuy = player.coins >= ft.cost;
+
+    // Row background
+    hud.fillStyle = isSelected ? 'rgba(0,180,255,0.2)' : 'rgba(255,255,255,0.05)';
+    hud.fillRect(w * 0.15, rowY, w * 0.7, rowH - 4 * scale);
+
+    // Fish name
+    hud.textAlign = 'left';
+    hud.font = `bold ${Math.round(16 * scale)}px sans-serif`;
+    hud.fillStyle = isSelected ? '#00ddff' : '#ffffff';
+    hud.fillText(ft.name, w * 0.18, rowY + rowH * 0.55);
+
+    // Size info
+    hud.font = `${Math.round(12 * scale)}px sans-serif`;
+    hud.fillStyle = '#aaaacc';
+    hud.fillText('Size: ' + ft.startSize.toFixed(1), w * 0.45, rowY + rowH * 0.55);
+
+    // Button
+    hud.textAlign = 'center';
+    if (isOwned) {
+      if (isSelected) {
+        drawShopButton(w * 0.72, rowY + rowH * 0.15, 70 * scale, 28 * scale, 'Selected', '#0088aa', scale);
+      } else {
+        drawShopButton(w * 0.72, rowY + rowH * 0.15, 70 * scale, 28 * scale, 'Select', '#226644', scale);
+      }
+    } else {
+      const col = canBuy ? '#886600' : '#553333';
+      drawShopButton(w * 0.72, rowY + rowH * 0.15, 70 * scale, 28 * scale, ft.cost + ' coins', col, scale);
+    }
+  }
+
+  // Back button
+  drawButton(w / 2 - 40 * scale, h * 0.85, 80 * scale, 36 * scale, 'Play', scale);
+}
+
+function drawButton(x, y, bw, bh, text, scale) {
+  hud.fillStyle = '#225588';
+  hud.fillRect(x, y, bw, bh);
+  hud.strokeStyle = '#44aadd';
+  hud.strokeRect(x, y, bw, bh);
+  hud.font = `bold ${Math.round(15 * scale)}px sans-serif`;
+  hud.fillStyle = '#ffffff';
+  hud.textAlign = 'center';
+  hud.fillText(text, x + bw / 2, y + bh * 0.68);
+}
+
+function drawShopButton(x, y, bw, bh, text, color, scale) {
+  hud.fillStyle = color;
+  hud.fillRect(x, y, bw, bh);
+  hud.font = `bold ${Math.round(11 * scale)}px sans-serif`;
+  hud.fillStyle = '#ffffff';
+  hud.textAlign = 'center';
+  hud.fillText(text, x + bw / 2, y + bh * 0.68);
+}
+
+// --- Input ---
+document.addEventListener('keydown', e => { keys[e.code] = true; });
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+container.addEventListener('mousemove', e => {
+  const rect = container.getBoundingClientRect();
+  mouseX = (e.clientX - rect.left) / rect.width;
+  mouseY = (e.clientY - rect.top) / rect.height;
+});
+
+container.addEventListener('mousedown', e => {
+  if (e.button === 0) {
+    initAudio();
+    handleClick(e);
+  }
+});
+
+container.addEventListener('mouseup', e => {
+  if (e.button === 0) {
+    player.biting = false;
+  }
+});
+
+// Touch support for mobile
+container.addEventListener('touchstart', e => {
+  initAudio();
+  const touch = e.touches[0];
+  const rect = container.getBoundingClientRect();
+  mouseX = (touch.clientX - rect.left) / rect.width;
+  mouseY = (touch.clientY - rect.top) / rect.height;
+  handleClick({ clientX: touch.clientX, clientY: touch.clientY });
+  e.preventDefault();
+}, { passive: false });
+
+container.addEventListener('touchmove', e => {
+  const touch = e.touches[0];
+  const rect = container.getBoundingClientRect();
+  mouseX = (touch.clientX - rect.left) / rect.width;
+  mouseY = (touch.clientY - rect.top) / rect.height;
+  e.preventDefault();
+}, { passive: false });
+
+container.addEventListener('touchend', e => {
+  player.biting = false;
+  e.preventDefault();
+}, { passive: false });
+
+function handleClick(e) {
+  const rect = container.getBoundingClientRect();
+  const cx = e.clientX - rect.left;
+  const cy = e.clientY - rect.top;
+  const w = rect.width, h = rect.height;
+  const scale = Math.min(w, h) / 600;
+
+  if (gameState === STATE_TITLE) {
+    startGame();
+    return;
+  }
+
+  if (gameState === STATE_PLAYING) {
+    player.biting = true;
+    return;
+  }
+
+  if (gameState === STATE_DEAD) {
+    // Check Retry button
+    const retryX = w / 2 - 100 * scale;
+    const retryY = h * 0.5;
+    const bw = 80 * scale;
+    const bh = 36 * scale;
+    if (cx >= retryX && cx <= retryX + bw && cy >= retryY && cy <= retryY + bh) {
+      startGame();
+      return;
+    }
+    // Check Shop button
+    const shopX = w / 2 + 20 * scale;
+    if (cx >= shopX && cx <= shopX + bw && cy >= retryY && cy <= retryY + bh) {
+      gameState = STATE_SHOP;
+      return;
+    }
+    return;
+  }
+
+  if (gameState === STATE_SHOP) {
+    const startY = h * 0.25;
+    const rowH = 50 * scale;
+
+    for (let i = 0; i < FISH_TYPES.length; i++) {
+      const rowY = startY + i * rowH;
+      const btnX = w * 0.72;
+      const btnY = rowY + rowH * 0.15;
+      const btnW = 70 * scale;
+      const btnH = 28 * scale;
+
+      if (cx >= btnX && cx <= btnX + btnW && cy >= btnY && cy <= btnY + btnH) {
+        if (ownedFish[i]) {
+          selectedFish = i;
+          localStorage.setItem('df_fish', selectedFish);
+        } else if (player.coins >= FISH_TYPES[i].cost) {
+          player.coins -= FISH_TYPES[i].cost;
+          ownedFish[i] = true;
+          selectedFish = i;
+          saveCoins();
+          localStorage.setItem('df_fish', selectedFish);
+          localStorage.setItem('df_owned', JSON.stringify(ownedFish));
+        }
+        return;
+      }
+    }
+
+    // Play button
+    const playBtnX = w / 2 - 40 * scale;
+    const playBtnY = h * 0.85;
+    const playBtnW = 80 * scale;
+    const playBtnH = 36 * scale;
+    if (cx >= playBtnX && cx <= playBtnX + playBtnW && cy >= playBtnY && cy <= playBtnY + playBtnH) {
+      startGame();
+    }
+    return;
+  }
+}
+
+function saveCoins() {
+  localStorage.setItem('df_coins', player.coins);
+}
+
+function startGame() {
+  clearAllEntities();
+
+  const ft = FISH_TYPES[selectedFish];
+  player.x = 2000;
+  player.y = 300;
+  player.z = 2000;
+  player.yaw = 0;
+  player.pitch = 0;
+  player.speed = 0;
+  player.size = ft.startSize;
+  player.health = 100;
+  player.maxHealth = 100;
+  player.biteForce = 10;
+  player.sprinting = false;
+  player.staminaLeft = 10;
+  player.biting = false;
+  player.alive = true;
+  hintTimer = 5;
+
+  camPos.x = player.x;
+  camPos.y = player.y + 80;
+  camPos.z = player.z - 200;
+
+  createPlayerMesh();
+  spawnAllEntities();
+  gameState = STATE_PLAYING;
+}
+
+// --- Build Scene ---
+buildEnvironment();
+
+// --- Game Loop ---
+function gameLoop(timestamp) {
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
+  lastTime = timestamp;
+  accumulator += dt;
+
+  while (accumulator >= FIXED_DT) {
+    accumulator -= FIXED_DT;
+    if (gameState === STATE_PLAYING) {
+      updateSteering();
+      updatePlayerMovement();
+      updateEntities();
+      updateEating();
+      updateDamage();
+    }
+  }
+
+  if (gameState === STATE_PLAYING || gameState === STATE_DEAD) {
+    syncMeshes();
+    updateCamera();
+    renderer.render(scene, camera);
+  }
+
+  drawHUD();
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
