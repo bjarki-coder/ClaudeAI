@@ -208,6 +208,260 @@ for (let i = 0; i < 30; i++) {
 scene.add(rayGroup);
 
 // ============================================================
+// WORLD BOX BOUNDARIES (visible underwater arena walls)
+// ============================================================
+const ARENA_DEPTH = 1200; // z range: -600 to +600
+const wallMat = new THREE.MeshLambertMaterial({
+  color: 0x0a2040,
+  transparent: true,
+  opacity: 0.18,
+  side: THREE.DoubleSide,
+  depthWrite: false
+});
+
+// Left wall (x = 0)
+const leftWallGeom = new THREE.PlaneGeometry(ARENA_DEPTH, WORLD_H);
+const leftWall = new THREE.Mesh(leftWallGeom, wallMat.clone());
+leftWall.rotation.y = Math.PI / 2;
+leftWall.position.set(0, WORLD_H / 2, 0);
+scene.add(leftWall);
+
+// Right wall (x = WORLD_W)
+const rightWall = new THREE.Mesh(leftWallGeom.clone(), wallMat.clone());
+rightWall.rotation.y = Math.PI / 2;
+rightWall.position.set(WORLD_W, WORLD_H / 2, 0);
+scene.add(rightWall);
+
+// Back wall (z = -600)
+const backWallGeom = new THREE.PlaneGeometry(WORLD_W, WORLD_H);
+const backWall = new THREE.Mesh(backWallGeom, wallMat.clone());
+backWall.position.set(WORLD_W / 2, WORLD_H / 2, -600);
+scene.add(backWall);
+
+// Front wall (z = +600)
+const frontWall = new THREE.Mesh(backWallGeom.clone(), wallMat.clone());
+frontWall.position.set(WORLD_W / 2, WORLD_H / 2, 600);
+scene.add(frontWall);
+
+// Edge glow strips to make the boundaries visible
+const edgeGlowMat = new THREE.MeshBasicMaterial({
+  color: 0x2277aa,
+  transparent: true,
+  opacity: 0.12,
+  depthWrite: false
+});
+// Vertical edge strips along the corners
+const edgeVGeom = new THREE.BoxGeometry(6, WORLD_H, 6);
+const edgeCorners = [
+  [0, WORLD_H / 2, -600], [0, WORLD_H / 2, 600],
+  [WORLD_W, WORLD_H / 2, -600], [WORLD_W, WORLD_H / 2, 600]
+];
+edgeCorners.forEach(pos => {
+  const edge = new THREE.Mesh(edgeVGeom, edgeGlowMat);
+  edge.position.set(pos[0], pos[1], pos[2]);
+  scene.add(edge);
+});
+// Horizontal edge strips along the floor perimeter
+const edgeHGeomX = new THREE.BoxGeometry(WORLD_W, 6, 6);
+const edgeHGeomZ = new THREE.BoxGeometry(6, 6, ARENA_DEPTH);
+[[WORLD_W / 2, 1, -600], [WORLD_W / 2, 1, 600]].forEach(pos => {
+  const edge = new THREE.Mesh(edgeHGeomX, edgeGlowMat);
+  edge.position.set(pos[0], pos[1], pos[2]);
+  scene.add(edge);
+});
+[[0, 1, 0], [WORLD_W, 1, 0]].forEach(pos => {
+  const edge = new THREE.Mesh(edgeHGeomZ, edgeGlowMat);
+  edge.position.set(pos[0], pos[1], pos[2]);
+  scene.add(edge);
+});
+
+// ============================================================
+// UNDERWATER HILLS / TERRAIN
+// ============================================================
+const hillGroup = new THREE.Group();
+const hillColors = [0x8a7a50, 0x6b8a50, 0x7a6a40, 0x5a7a4a, 0x9a8a55, 0x6a7a35];
+const hills = [];
+
+// Generate 18 hills spaced out across the map
+for (let i = 0; i < 18; i++) {
+  const radius = 50 + Math.random() * 150;
+  const height = 30 + Math.random() * 120;
+  const hillColor = hillColors[Math.floor(Math.random() * hillColors.length)];
+  const useHemisphere = Math.random() > 0.5;
+
+  let hillMesh;
+  if (useHemisphere) {
+    const geom = new THREE.SphereGeometry(radius, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    const mat = new THREE.MeshLambertMaterial({ color: hillColor });
+    hillMesh = new THREE.Mesh(geom, mat);
+    hillMesh.scale.y = height / radius;
+  } else {
+    const geom = new THREE.ConeGeometry(radius, height, 12);
+    const mat = new THREE.MeshLambertMaterial({ color: hillColor });
+    hillMesh = new THREE.Mesh(geom, mat);
+    hillMesh.position.y = height / 2;
+  }
+
+  // Space hills out across the map - divide into a grid with jitter
+  const col = i % 6;
+  const row = Math.floor(i / 6);
+  const cellW = WORLD_W / 6;
+  const cellZ = 900 / 3; // z range from -450 to +450 to avoid wall clipping
+  const hx = cellW * 0.5 + col * cellW + (Math.random() - 0.5) * cellW * 0.6;
+  const hz = -450 + cellZ * 0.5 + row * cellZ + (Math.random() - 0.5) * cellZ * 0.6;
+
+  const hillContainer = new THREE.Group();
+  hillContainer.add(hillMesh);
+  hillContainer.position.set(hx, 0, hz);
+  hillGroup.add(hillContainer);
+
+  hills.push({ container: hillContainer, x: hx, z: hz, radius, height });
+}
+scene.add(hillGroup);
+
+// ============================================================
+// CORAL ON HILLS
+// ============================================================
+const hillCoralColors = [0xff5588, 0xcc44ff, 0xff8833, 0xdd2244, 0x33cc77, 0xffcc00, 0xff66aa, 0x44dddd];
+hills.forEach(hill => {
+  const coralCount = 3 + Math.floor(Math.random() * 6); // 3-8 per hill
+  for (let c = 0; c < coralCount; c++) {
+    const cColor = hillCoralColors[Math.floor(Math.random() * hillCoralColors.length)];
+    const cType = Math.floor(Math.random() * 4);
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * hill.radius * 0.7;
+    const cx = hill.x + Math.cos(angle) * dist;
+    const cz = hill.z + Math.sin(angle) * dist;
+    // Place coral at a height based on distance from center (on the slope)
+    const distRatio = 1 - dist / hill.radius;
+    const cy = distRatio * hill.height * 0.7;
+
+    const coralPiece = new THREE.Group();
+
+    if (cType === 0) {
+      // Sphere coral (brain coral)
+      const g = new THREE.SphereGeometry(4 + Math.random() * 6, 6, 5);
+      const m = new THREE.MeshLambertMaterial({ color: cColor });
+      const mesh = new THREE.Mesh(g, m);
+      mesh.scale.y = 0.5 + Math.random() * 0.5;
+      coralPiece.add(mesh);
+    } else if (cType === 1) {
+      // Tube coral (thin cylinders)
+      const tubeCount = 2 + Math.floor(Math.random() * 4);
+      for (let t = 0; t < tubeCount; t++) {
+        const g = new THREE.CylinderGeometry(1.5, 2, 8 + Math.random() * 14, 5);
+        const m = new THREE.MeshLambertMaterial({ color: cColor });
+        const mesh = new THREE.Mesh(g, m);
+        mesh.position.set((Math.random() - 0.5) * 6, 4 + Math.random() * 6, (Math.random() - 0.5) * 6);
+        mesh.rotation.x = (Math.random() - 0.5) * 0.3;
+        mesh.rotation.z = (Math.random() - 0.5) * 0.3;
+        coralPiece.add(mesh);
+      }
+    } else if (cType === 2) {
+      // Branching coral (cone clusters)
+      const branchCount = 2 + Math.floor(Math.random() * 3);
+      for (let b = 0; b < branchCount; b++) {
+        const g = new THREE.ConeGeometry(2 + Math.random() * 3, 8 + Math.random() * 12, 5);
+        const m = new THREE.MeshLambertMaterial({ color: cColor });
+        const mesh = new THREE.Mesh(g, m);
+        mesh.position.set((Math.random() - 0.5) * 8, 5 + Math.random() * 5, (Math.random() - 0.5) * 8);
+        mesh.rotation.x = (Math.random() - 0.5) * 0.4;
+        mesh.rotation.z = (Math.random() - 0.5) * 0.4;
+        coralPiece.add(mesh);
+      }
+    } else {
+      // Fan coral (flat disc)
+      const g = new THREE.ConeGeometry(5 + Math.random() * 5, 10 + Math.random() * 8, 6);
+      const m = new THREE.MeshLambertMaterial({ color: cColor });
+      const mesh = new THREE.Mesh(g, m);
+      mesh.position.y = 5;
+      mesh.scale.z = 0.3;
+      coralPiece.add(mesh);
+    }
+
+    coralPiece.position.set(cx, cy, cz);
+    scene.add(coralPiece);
+  }
+});
+
+// ============================================================
+// SEA FLOOR DECORATIONS (rocks, seaweed, shells)
+// ============================================================
+const seaweedMeshes = []; // track for animation
+
+// Rocks - dark gray irregular shapes
+for (let i = 0; i < 20; i++) {
+  const geomType = Math.random() > 0.5
+    ? new THREE.DodecahedronGeometry(5 + Math.random() * 12, 0)
+    : new THREE.IcosahedronGeometry(5 + Math.random() * 12, 0);
+  const rockMat = new THREE.MeshLambertMaterial({
+    color: new THREE.Color(0.25 + Math.random() * 0.1, 0.25 + Math.random() * 0.1, 0.27 + Math.random() * 0.1)
+  });
+  const rock = new THREE.Mesh(geomType, rockMat);
+  rock.position.set(
+    200 + Math.random() * (WORLD_W - 400),
+    Math.random() * 4,
+    -500 + Math.random() * 1000
+  );
+  rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+  rock.scale.set(1 + Math.random() * 0.5, 0.6 + Math.random() * 0.4, 1 + Math.random() * 0.5);
+  scene.add(rock);
+}
+
+// Seaweed - tall thin green cylinders/cones that sway
+const seaweedColors = [0x1a6b1a, 0x228822, 0x2a7a2a, 0x1a8a3a, 0x337733];
+for (let i = 0; i < 25; i++) {
+  const swGroup = new THREE.Group();
+  const swColor = seaweedColors[Math.floor(Math.random() * seaweedColors.length)];
+  const bladeCount = 2 + Math.floor(Math.random() * 3);
+
+  for (let b = 0; b < bladeCount; b++) {
+    const bladeH = 15 + Math.random() * 35;
+    const geom = new THREE.ConeGeometry(1.5 + Math.random() * 1.5, bladeH, 4);
+    const mat = new THREE.MeshLambertMaterial({ color: swColor });
+    const blade = new THREE.Mesh(geom, mat);
+    blade.position.set((Math.random() - 0.5) * 5, bladeH / 2, (Math.random() - 0.5) * 5);
+    blade.rotation.x = (Math.random() - 0.5) * 0.15;
+    blade.rotation.z = (Math.random() - 0.5) * 0.15;
+    swGroup.add(blade);
+  }
+
+  swGroup.position.set(
+    100 + Math.random() * (WORLD_W - 200),
+    0,
+    -500 + Math.random() * 1000
+  );
+  scene.add(swGroup);
+  seaweedMeshes.push({ group: swGroup, phase: Math.random() * Math.PI * 2, speed: 0.5 + Math.random() * 1.0 });
+}
+
+// Shells - small white/cream spheres or torus shapes
+const shellColors = [0xf5f0e0, 0xf0e8d0, 0xfff8ee, 0xe8ddc8, 0xfff0d0];
+for (let i = 0; i < 15; i++) {
+  const sColor = shellColors[Math.floor(Math.random() * shellColors.length)];
+  const useShell = Math.random() > 0.4;
+  let shellMesh;
+  if (useShell) {
+    const g = new THREE.TorusGeometry(2 + Math.random() * 2, 1, 6, 8);
+    const m = new THREE.MeshLambertMaterial({ color: sColor });
+    shellMesh = new THREE.Mesh(g, m);
+    shellMesh.rotation.x = Math.PI / 2 + (Math.random() - 0.5) * 0.3;
+  } else {
+    const g = new THREE.SphereGeometry(1.5 + Math.random() * 2, 6, 5);
+    const m = new THREE.MeshLambertMaterial({ color: sColor });
+    shellMesh = new THREE.Mesh(g, m);
+    shellMesh.scale.y = 0.4 + Math.random() * 0.3;
+  }
+  shellMesh.position.set(
+    200 + Math.random() * (WORLD_W - 400),
+    0.5,
+    -500 + Math.random() * 1000
+  );
+  shellMesh.rotation.y = Math.random() * Math.PI * 2;
+  scene.add(shellMesh);
+}
+
+// ============================================================
 // ABOVE-WATER ENVIRONMENT (sky, sun, beach)
 // ============================================================
 
@@ -2517,6 +2771,14 @@ function gameLoop(timestamp) {
   // Animate environment
   animateLightRays(timestamp);
   updateSplashParticles();
+
+  // Animate seaweed sway
+  for (let i = 0; i < seaweedMeshes.length; i++) {
+    const sw = seaweedMeshes[i];
+    const sway = Math.sin(timestamp * 0.001 * sw.speed + sw.phase) * 0.06;
+    sw.group.rotation.x = sway;
+    sw.group.rotation.z = Math.sin(timestamp * 0.0008 * sw.speed + sw.phase + 1.5) * 0.04;
+  }
 
   // Render 3D scene
   renderer.render(scene, camera);
