@@ -592,28 +592,22 @@ function updateSplashParticles() {
 }
 
 // ============================================================
-// MOUSE LOOK (Pointer Lock)
+// MOUSE STEERING (Feed and Grow Fish style)
 // ============================================================
-let pointerLocked = false;
-let playerYaw = 0;   // left/right rotation (radians)
-let playerPitch = 0;  // up/down tilt (radians)
-const MOUSE_SENSITIVITY = 0.0006;
-const PITCH_MIN = -Math.PI / 3;
-const PITCH_MAX = Math.PI / 3;
+let playerYaw = 0;
+let playerPitch = 0;
+const PITCH_MIN = -Math.PI / 4;
+const PITCH_MAX = Math.PI / 4;
+const TURN_SPEED = 0.03; // how fast the fish turns toward the mouse
+let mouseScreenX = 0.5; // 0=left, 1=right (normalized)
+let mouseScreenY = 0.5; // 0=top, 1=bottom
 
 const gameCanvas = renderer.domElement;
 
-// Pointer lock is requested in handlePointerDown when not already locked
-
-document.addEventListener('pointerlockchange', () => {
-  pointerLocked = document.pointerLockElement === gameCanvas;
-});
-
 document.addEventListener('mousemove', (e) => {
-  if (!pointerLocked) return;
-  playerYaw -= e.movementX * MOUSE_SENSITIVITY;
-  playerPitch -= e.movementY * MOUSE_SENSITIVITY;
-  playerPitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, playerPitch));
+  const rect = container.getBoundingClientRect();
+  mouseScreenX = (e.clientX - rect.left) / rect.width;
+  mouseScreenY = (e.clientY - rect.top) / rect.height;
 });
 
 // Track whether player was above water last frame (for splash detection)
@@ -1272,46 +1266,25 @@ const CAM_DISTANCE = 350; // distance behind player
 function updateCamera3D() {
   const pos = worldToScene(player.x, player.y, player.z);
 
-  if (pointerLocked) {
-    // Mouse-look camera: positioned behind player based on yaw/pitch
-    const behindX = -Math.sin(playerYaw) * CAM_DISTANCE;
-    const behindZ = -Math.cos(playerYaw) * CAM_DISTANCE;
-    const behindY = Math.sin(playerPitch) * CAM_DISTANCE * 0.3 + 100;
+  // Feed and Grow Fish style: camera always behind the fish
+  const behindX = -Math.sin(playerYaw) * CAM_DISTANCE;
+  const behindZ = -Math.cos(playerYaw) * CAM_DISTANCE;
+  const behindY = 120;
 
-    const desiredX = pos.x + behindX;
-    const desiredY = pos.y + behindY;
-    const desiredZ = pos.z + behindZ;
+  const desiredX = pos.x + behindX;
+  const desiredY = pos.y + behindY;
+  const desiredZ = pos.z + behindZ;
 
-    // Smooth follow
-    camPos.x += (desiredX - camPos.x) * 0.08;
-    camPos.y += (desiredY - camPos.y) * 0.08;
-    camPos.z += (desiredZ - camPos.z) * 0.08;
+  // Smooth follow
+  camPos.x += (desiredX - camPos.x) * 0.06;
+  camPos.y += (desiredY - camPos.y) * 0.06;
+  camPos.z += (desiredZ - camPos.z) * 0.06;
 
-    camera.position.copy(camPos);
+  camera.position.copy(camPos);
 
-    // Look at a point ahead of the player in the look direction
-    const lookDist = 100;
-    camTarget.set(
-      pos.x + Math.sin(playerYaw) * lookDist,
-      pos.y - Math.sin(playerPitch) * lookDist,
-      pos.z + Math.cos(playerYaw) * lookDist
-    );
-    camera.lookAt(camTarget);
-  } else {
-    // Default camera: behind and above, following player facing direction
-    const dir = player.facingRight ? 1 : -1;
-    camTarget.set(pos.x + dir * 60, pos.y, pos.z);
-    const desiredX = pos.x - dir * 180;
-    const desiredY = pos.y + 120;
-    const desiredZ = pos.z + 280;
-
-    camPos.x += (desiredX - camPos.x) * 0.04;
-    camPos.y += (desiredY - camPos.y) * 0.04;
-    camPos.z += (desiredZ - camPos.z) * 0.04;
-
-    camera.position.copy(camPos);
-    camera.lookAt(camTarget);
-  }
+  // Look at the fish
+  camTarget.set(pos.x, pos.y, pos.z);
+  camera.lookAt(camTarget);
 
   // Update fog/scene based on whether camera is above or below water
   const isAboveWater = camera.position.y > WORLD_H;
@@ -1738,11 +1711,6 @@ function handlePointerDown(e) {
     if (hitBtn(pos, btnX, panelY + 145, btnW, 32)) { gameState = STATE_SHOP; return; }
     return;
   }
-  // If pointer is not locked, first click should lock it (don't bite)
-  if (!pointerLocked && gameState === STATE_PLAYING) {
-    gameCanvas.requestPointerLock();
-    return;
-  }
   mouseDown = true; mouseHoldTime = 0;
 }
 
@@ -1755,12 +1723,12 @@ container.addEventListener('mousedown', handlePointerDown);
 container.addEventListener('mouseup', handlePointerUp);
 container.addEventListener('touchstart', handlePointerDown, { passive: false });
 container.addEventListener('touchend', handlePointerUp);
-// Also listen on document for pointer-locked mouse events
+// Also listen on document for mouse events
 document.addEventListener('mousedown', (e) => {
-  if (pointerLocked) { mouseDown = true; mouseHoldTime = 0; }
+  if (gameState === STATE_PLAYING) { mouseDown = true; mouseHoldTime = 0; }
 });
 document.addEventListener('mouseup', (e) => {
-  if (pointerLocked) { mouseDown = false; mouseHoldTime = 0; }
+  mouseDown = false; mouseHoldTime = 0;
 });
 
 function getClickPos(e) {
@@ -1785,48 +1753,41 @@ function updatePlayerInput() {
   player.vy = 0;
   player.vz = 0;
 
-  if (pointerLocked) {
-    // Camera-relative movement: W/S = forward/back along yaw, A/D = strafe
-    const forwardX = Math.sin(playerYaw);
-    const forwardZ = Math.cos(playerYaw);
-    const strafeX = Math.cos(playerYaw);
-    const strafeZ = -Math.sin(playerYaw);
+  // Mouse steers the fish (Feed and Grow Fish style)
+  // Mouse left/right on screen = turn left/right
+  const turnX = (mouseScreenX - 0.5) * 2; // -1 to 1
+  const turnY = (mouseScreenY - 0.5) * 2; // -1 to 1
+  playerYaw -= turnX * TURN_SPEED;
+  playerPitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, turnY * PITCH_MAX));
 
-    let moveX = 0, moveY = 0, moveZ = 0;
+  // Movement relative to fish facing direction
+  const forwardX = Math.sin(playerYaw);
+  const forwardZ = Math.cos(playerYaw);
+  const strafeX = Math.cos(playerYaw);
+  const strafeZ = -Math.sin(playerYaw);
 
-    if (keysDown['KeyW'] || keysDown['ArrowUp']) { moveX += forwardX; moveZ += forwardZ; }
-    if (keysDown['KeyS'] || keysDown['ArrowDown']) { moveX -= forwardX; moveZ -= forwardZ; }
-    if (keysDown['KeyA'] || keysDown['ArrowLeft']) { moveX -= strafeX; moveZ -= strafeZ; }
-    if (keysDown['KeyD'] || keysDown['ArrowRight']) { moveX += strafeX; moveZ += strafeZ; }
+  let moveX = 0, moveY = 0, moveZ = 0;
 
-    // Space = swim up (decrease y in game coords), C or Ctrl = swim down (increase y)
-    if (keysDown['Space']) moveY = -1;
-    if (keysDown['KeyC'] || keysDown['ControlLeft'] || keysDown['ControlRight']) moveY = 1;
+  if (keysDown['KeyW'] || keysDown['ArrowUp']) { moveX += forwardX; moveZ += forwardZ; }
+  if (keysDown['KeyS'] || keysDown['ArrowDown']) { moveX -= forwardX; moveZ -= forwardZ; }
+  if (keysDown['KeyA'] || keysDown['ArrowLeft']) { moveX -= strafeX; moveZ -= strafeZ; }
+  if (keysDown['KeyD'] || keysDown['ArrowRight']) { moveX += strafeX; moveZ += strafeZ; }
 
-    // Normalize the horizontal movement vector
-    const hLen = Math.sqrt(moveX * moveX + moveZ * moveZ);
-    if (hLen > 0) { moveX /= hLen; moveZ /= hLen; }
+  // Space = swim up, C/Ctrl = swim down
+  if (keysDown['Space']) moveY = -1;
+  if (keysDown['KeyC'] || keysDown['ControlLeft'] || keysDown['ControlRight']) moveY = 1;
 
-    // Normalize the full 3D vector
-    const totalLen = Math.sqrt(moveX * moveX + moveY * moveY + moveZ * moveZ);
-    if (totalLen > 0) {
-      moveX /= totalLen; moveY /= totalLen; moveZ /= totalLen;
-    }
+  // Normalize
+  const totalLen = Math.sqrt(moveX * moveX + moveY * moveY + moveZ * moveZ);
+  if (totalLen > 0) {
+    moveX /= totalLen; moveY /= totalLen; moveZ /= totalLen;
+  }
 
-    player.vx = moveX * speed;
-    player.vy = moveY * speed;
-    player.vz = moveZ * speed;
-  } else {
-    // Fallback: WASD in world directions when pointer is not locked
-    if (keysDown['ArrowLeft'] || keysDown['KeyA']) player.vx = -speed;
-    if (keysDown['ArrowRight'] || keysDown['KeyD']) player.vx = speed;
-    if (keysDown['ArrowUp'] || keysDown['KeyW']) player.vy = -speed;
-    if (keysDown['ArrowDown'] || keysDown['KeyS']) player.vy = speed;
+  player.vx = moveX * speed;
+  player.vy = moveY * speed;
+  player.vz = moveZ * speed;
 
-    if (player.vx !== 0 && player.vy !== 0) {
-      player.vx *= 0.707;
-      player.vy *= 0.707;
-    }
+  {
   }
 
   if (player.vx > 0) player.facingRight = true;
@@ -2179,21 +2140,13 @@ function updateBiteCollision() {
   player.canHitSomething = false;
   if (!player.biting || !player.alive) return;
 
-  // Calculate mouth position based on look direction when pointer locked
-  let mouthX, mouthY, mouthZ;
-  if (pointerLocked) {
-    const lookDirX = Math.sin(playerYaw);
-    const lookDirZ = Math.cos(playerYaw);
-    const lookDirY = -Math.sin(playerPitch);
-    mouthX = player.x + lookDirX * 20 * player.size;
-    mouthY = player.y + lookDirY * 20 * player.size;
-    mouthZ = player.z + lookDirZ * 20 * player.size;
-  } else {
-    const dir = player.facingRight ? 1 : -1;
-    mouthX = player.x + dir * 20 * player.size;
-    mouthY = player.y;
-    mouthZ = player.z;
-  }
+  // Mouth position in the direction the fish faces
+  const lookDirX = Math.sin(playerYaw);
+  const lookDirZ = Math.cos(playerYaw);
+  const lookDirY = -Math.sin(playerPitch);
+  const mouthX = player.x + lookDirX * 20 * player.size;
+  const mouthY = player.y + lookDirY * 20 * player.size;
+  const mouthZ = player.z + lookDirZ * 20 * player.size;
   const range = BITE_RANGE * player.size;
 
   for (let i = entities.length - 1; i >= 0; i--) {
@@ -2475,15 +2428,10 @@ function syncMeshes() {
     const pos = worldToScene(player.x, player.y, player.z);
     playerMesh.position.set(pos.x, pos.y, pos.z);
     playerMesh.scale.set(player.size, player.size, player.size);
-    if (pointerLocked) {
-      // Fish faces exactly where you're looking (away from camera)
-      playerMesh.rotation.set(0, 0, 0);
-      playerMesh.rotation.y = playerYaw + Math.PI / 2;
-      playerMesh.rotation.x = -playerPitch * 0.5;
-    } else {
-      playerMesh.rotation.set(0, 0, 0);
-      playerMesh.rotation.y = player.facingRight ? 0 : Math.PI;
-    }
+    // Fish faces its movement/steering direction
+    playerMesh.rotation.set(0, 0, 0);
+    playerMesh.rotation.y = playerYaw + Math.PI / 2;
+    playerMesh.rotation.x = -playerPitch * 0.4;
 
     // Tail wag
     const tail = playerMesh.getObjectByName('tail');
@@ -2622,13 +2570,11 @@ function drawHUD() {
     ctx.fillText('Family: ON', 155, CANVAS_H - 32);
   }
 
-  // Pointer lock hint
-  if (!pointerLocked) {
-    ctx.textAlign = 'center';
-    ctx.font = '13px sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.fillText('Click to enable mouse look', CANVAS_W / 2, CANVAS_H - 15);
-  }
+  // Controls hint
+  ctx.textAlign = 'center';
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fillText('Mouse to steer \u00B7 WASD to swim \u00B7 Click to bite', CANVAS_W / 2, CANVAS_H - 10);
 
   // Above water indicator
   if (player.y < 0) {
