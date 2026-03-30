@@ -67,8 +67,11 @@
 // ============================================================
 const CANVAS_W = 600;
 const CANVAS_H = 600;
-const WORLD_W = 6000;
-const WORLD_H = 800;
+const WORLD_W = 15000;
+const WORLD_H = 1200;
+const WATER_SURFACE_Y = WORLD_H; // water surface in game coords (y=0 is top, y=WORLD_H is bottom/floor)
+const ABOVE_WATER_HEIGHT = 800; // how high above water the world extends
+const GRAVITY_ABOVE_WATER = 6; // gravity when above water surface
 const FIXED_DT = 1 / 60;
 const PLAYER_SPEED = 3;
 const SPRINT_SPEED = 5.4;
@@ -83,9 +86,9 @@ const BITE_RANGE = 30;
 const container = document.getElementById('game-container');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a2848);
-scene.fog = new THREE.FogExp2(0x061830, 0.0004);
+scene.fog = new THREE.FogExp2(0x061830, 0.00025);
 
-const camera = new THREE.PerspectiveCamera(60, 1, 1, 8000);
+const camera = new THREE.PerspectiveCamera(60, 1, 1, 20000);
 camera.position.set(300, 120, 500);
 camera.lookAt(300, 80, 300);
 
@@ -100,11 +103,11 @@ const ambientLight = new THREE.AmbientLight(0x4488cc, 0.6);
 scene.add(ambientLight);
 
 const dirLight = new THREE.DirectionalLight(0xaaddff, 0.8);
-dirLight.position.set(200, 600, 300);
+dirLight.position.set(WORLD_W / 2, WORLD_H + 200, 300);
 scene.add(dirLight);
 
-const pointLight = new THREE.PointLight(0x88ccff, 0.3, 2000);
-pointLight.position.set(3000, 600, 400);
+const pointLight = new THREE.PointLight(0x88ccff, 0.3, 5000);
+pointLight.position.set(WORLD_W / 2, WORLD_H - 200, 400);
 scene.add(pointLight);
 
 // ============================================================
@@ -118,7 +121,7 @@ const ctx = hudCanvas.getContext('2d');
 // ============================================================
 
 // Ocean floor
-const floorGeom = new THREE.PlaneGeometry(WORLD_W + 400, 1200);
+const floorGeom = new THREE.PlaneGeometry(WORLD_W + 400, 2400);
 const floorMat = new THREE.MeshLambertMaterial({ color: 0xb08850 });
 const floor = new THREE.Mesh(floorGeom, floorMat);
 floor.rotation.x = -Math.PI / 2;
@@ -126,12 +129,12 @@ floor.position.set(WORLD_W / 2, 0, 0);
 scene.add(floor);
 
 // Sand detail - darker patches
-for (let i = 0; i < 40; i++) {
+for (let i = 0; i < 100; i++) {
   const patchGeom = new THREE.PlaneGeometry(60 + Math.random() * 100, 30 + Math.random() * 60);
   const patchMat = new THREE.MeshLambertMaterial({ color: 0x8a6a40, transparent: true, opacity: 0.4 });
   const patch = new THREE.Mesh(patchGeom, patchMat);
   patch.rotation.x = -Math.PI / 2;
-  patch.position.set(Math.random() * WORLD_W, 0.1, -300 + Math.random() * 600);
+  patch.position.set(Math.random() * WORLD_W, 0.1, -600 + Math.random() * 1200);
   scene.add(patch);
 }
 
@@ -168,13 +171,13 @@ for (let x = 50; x < WORLD_W; x += 120 + Math.random() * 80) {
     cGroup.add(mesh);
   }
 
-  cGroup.position.set(x, 0, -200 + Math.random() * 400);
+  cGroup.position.set(x, 0, -600 + Math.random() * 1200);
   coralGroup.add(cGroup);
 }
 scene.add(coralGroup);
 
 // Water surface (semi-transparent plane at top)
-const waterGeom = new THREE.PlaneGeometry(WORLD_W + 400, 1200);
+const waterGeom = new THREE.PlaneGeometry(WORLD_W + 400, 2400);
 const waterMat = new THREE.MeshLambertMaterial({
   color: 0x2090d0,
   transparent: true,
@@ -183,13 +186,13 @@ const waterMat = new THREE.MeshLambertMaterial({
 });
 const waterSurface = new THREE.Mesh(waterGeom, waterMat);
 waterSurface.rotation.x = -Math.PI / 2;
-waterSurface.position.set(WORLD_W / 2, 800, 0);
+waterSurface.position.set(WORLD_W / 2, WORLD_H, 0);
 scene.add(waterSurface);
 
 // Light rays (vertical translucent planes)
 const rayGroup = new THREE.Group();
-for (let i = 0; i < 12; i++) {
-  const rayGeom = new THREE.PlaneGeometry(20, 800);
+for (let i = 0; i < 30; i++) {
+  const rayGeom = new THREE.PlaneGeometry(20, WORLD_H);
   const rayMat = new THREE.MeshBasicMaterial({
     color: 0x88ccff,
     transparent: true,
@@ -198,11 +201,167 @@ for (let i = 0; i < 12; i++) {
     depthWrite: false
   });
   const ray = new THREE.Mesh(rayGeom, rayMat);
-  ray.position.set(500 + i * 450, 400, -100 + Math.random() * 200);
+  ray.position.set(250 + i * 500, WORLD_H / 2, -200 + Math.random() * 400);
   ray.rotation.z = (Math.random() - 0.5) * 0.2;
   rayGroup.add(ray);
 }
 scene.add(rayGroup);
+
+// ============================================================
+// ABOVE-WATER ENVIRONMENT (sky, sun, beach)
+// ============================================================
+
+// Sky dome - large hemisphere above the water
+const skyGeom = new THREE.SphereGeometry(12000, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+const skyMat = new THREE.MeshBasicMaterial({
+  color: 0x87ceeb,
+  side: THREE.BackSide,
+  fog: false
+});
+const skyDome = new THREE.Mesh(skyGeom, skyMat);
+skyDome.position.set(WORLD_W / 2, WORLD_H, 0);
+scene.add(skyDome);
+
+// Sun - bright yellow sphere high in the sky
+const sunGeom = new THREE.SphereGeometry(200, 16, 16);
+const sunMat = new THREE.MeshBasicMaterial({ color: 0xffee88, fog: false });
+const sunMesh = new THREE.Mesh(sunGeom, sunMat);
+sunMesh.position.set(WORLD_W / 2, WORLD_H + 3000, -2000);
+scene.add(sunMesh);
+
+// Sun glow
+const sunGlowGeom = new THREE.SphereGeometry(350, 16, 16);
+const sunGlowMat = new THREE.MeshBasicMaterial({
+  color: 0xffdd44,
+  transparent: true,
+  opacity: 0.3,
+  fog: false
+});
+const sunGlow = new THREE.Mesh(sunGlowGeom, sunGlowMat);
+sunGlow.position.copy(sunMesh.position);
+scene.add(sunGlow);
+
+// Sunlight from above
+const sunLight = new THREE.DirectionalLight(0xffffcc, 0.6);
+sunLight.position.set(WORLD_W / 2, WORLD_H + 2000, -1000);
+scene.add(sunLight);
+
+// Beach/land along x=0 side (left edge) - sand rising above water
+const beachGroup = new THREE.Group();
+
+// Sand beach - a ramp going from underwater up above the surface
+const beachLen = 3000; // along z
+const beachWidth = 600;
+const beachGeomShape = new THREE.PlaneGeometry(beachWidth, beachLen, 10, 10);
+// Tilt it so it goes from below water to above
+const beachMat2 = new THREE.MeshLambertMaterial({ color: 0xc2a060 });
+const beachMesh = new THREE.Mesh(beachGeomShape, beachMat2);
+beachMesh.rotation.x = -Math.PI / 2;
+beachMesh.rotation.z = 0.15; // slight tilt
+beachMesh.position.set(-200, WORLD_H + 40, 0);
+beachGroup.add(beachMesh);
+
+// Raised sand above water
+const beachTopGeom = new THREE.BoxGeometry(400, 80, beachLen);
+const beachTopMat = new THREE.MeshLambertMaterial({ color: 0xd4b870 });
+const beachTop = new THREE.Mesh(beachTopGeom, beachTopMat);
+beachTop.position.set(-300, WORLD_H + 60, 0);
+beachGroup.add(beachTop);
+
+// Green vegetation/grass on top
+const grassGeom = new THREE.BoxGeometry(300, 20, beachLen);
+const grassMat = new THREE.MeshLambertMaterial({ color: 0x3a8a3a });
+const grassMesh = new THREE.Mesh(grassGeom, grassMat);
+grassMesh.position.set(-350, WORLD_H + 110, 0);
+beachGroup.add(grassMesh);
+
+// Simple trees on beach
+for (let i = 0; i < 20; i++) {
+  const tz = -1400 + i * 150 + Math.random() * 50;
+  // Trunk
+  const trunkGeom = new THREE.CylinderGeometry(3, 5, 60, 6);
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8B6914 });
+  const trunk = new THREE.Mesh(trunkGeom, trunkMat);
+  trunk.position.set(-300 - Math.random() * 100, WORLD_H + 145, tz);
+  beachGroup.add(trunk);
+  // Leaves
+  const leafGeom = new THREE.SphereGeometry(25, 6, 6);
+  const leafMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+  const leaf = new THREE.Mesh(leafGeom, leafMat);
+  leaf.position.set(trunk.position.x, trunk.position.y + 40, tz);
+  leaf.scale.set(1, 0.7, 1);
+  beachGroup.add(leaf);
+}
+
+scene.add(beachGroup);
+
+// ============================================================
+// SPLASH PARTICLES
+// ============================================================
+let splashParticles = [];
+const splashGeom = new THREE.SphereGeometry(2, 4, 4);
+const splashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
+
+function createSplash(worldX, worldY) {
+  const scenePos = worldToScene(worldX, worldY);
+  for (let i = 0; i < 15; i++) {
+    const mesh = new THREE.Mesh(splashGeom, splashMat.clone());
+    mesh.position.set(
+      scenePos.x + (Math.random() - 0.5) * 40,
+      WORLD_H,
+      (Math.random() - 0.5) * 40
+    );
+    const vx = (Math.random() - 0.5) * 3;
+    const vy = 2 + Math.random() * 4;
+    const vz = (Math.random() - 0.5) * 3;
+    scene.add(mesh);
+    splashParticles.push({ mesh, vx, vy, vz, life: 1.0 });
+  }
+}
+
+function updateSplashParticles() {
+  for (let i = splashParticles.length - 1; i >= 0; i--) {
+    const p = splashParticles[i];
+    p.mesh.position.x += p.vx;
+    p.mesh.position.y += p.vy;
+    p.mesh.position.z += p.vz;
+    p.vy -= 0.15; // gravity on particles
+    p.life -= 0.02;
+    p.mesh.material.opacity = p.life * 0.7;
+    if (p.life <= 0) {
+      scene.remove(p.mesh);
+      splashParticles.splice(i, 1);
+    }
+  }
+}
+
+// ============================================================
+// MOUSE LOOK (Pointer Lock)
+// ============================================================
+let pointerLocked = false;
+let playerYaw = 0;   // left/right rotation (radians)
+let playerPitch = 0;  // up/down tilt (radians)
+const MOUSE_SENSITIVITY = 0.002;
+const PITCH_MIN = -Math.PI / 3;
+const PITCH_MAX = Math.PI / 3;
+
+const gameCanvas = renderer.domElement;
+
+// Pointer lock is requested in handlePointerDown when not already locked
+
+document.addEventListener('pointerlockchange', () => {
+  pointerLocked = document.pointerLockElement === gameCanvas;
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!pointerLocked) return;
+  playerYaw -= e.movementX * MOUSE_SENSITIVITY;
+  playerPitch -= e.movementY * MOUSE_SENSITIVITY;
+  playerPitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, playerPitch));
+});
+
+// Track whether player was above water last frame (for splash detection)
+let playerWasAboveWater = false;
 
 // ============================================================
 // BUBBLE PARTICLES (3D)
@@ -219,13 +378,13 @@ const bubbleMat = new THREE.MeshBasicMaterial({
 function initBubbles3D() {
   for (const b of bubbles3D) scene.remove(b.mesh);
   bubbles3D = [];
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 120; i++) {
     const mesh = new THREE.Mesh(bubbleGeom, bubbleMat.clone());
     const r = 1 + Math.random() * 3;
     mesh.scale.set(r, r, r);
     const bx = Math.random() * WORLD_W;
     const by = Math.random() * WORLD_H;
-    const bz = -300 + Math.random() * 600;
+    const bz = -600 + Math.random() * 1200;
     mesh.position.set(bx, by, bz);
     scene.add(mesh);
     bubbles3D.push({
@@ -247,7 +406,7 @@ function updateBubbles3D() {
       b.mesh.position.y = -10;
       b.baseX = Math.random() * WORLD_W;
       b.mesh.position.x = b.baseX;
-      b.mesh.position.z = -300 + Math.random() * 600;
+      b.mesh.position.z = -600 + Math.random() * 1200;
     }
   }
 }
@@ -839,37 +998,73 @@ function createFamilyMeshes() {
 // ============================================================
 // WORLD COORD -> 3D POSITION
 // ============================================================
-// Game world: x is horizontal (0..6000), y is vertical (0=top, 800=bottom)
-// Three.js: x = game x, y = game (WORLD_H - y) so bottom=0 top=800, z = depth variation
+// Game world: x is horizontal (0..WORLD_W), y is vertical (0=above water, WORLD_H=bottom/floor)
+// Negative y values = above water surface
+// Three.js: x = game x, y = game (WORLD_H - y) so bottom=0 top=WORLD_H, z = depth variation
 function worldToScene(wx, wy) {
   return { x: wx, y: WORLD_H - wy, z: 0 };
 }
 
 // ============================================================
-// CAMERA UPDATE (3D)
+// CAMERA UPDATE (3D) - Mouse look based
 // ============================================================
 const camTarget = new THREE.Vector3();
 const camPos = new THREE.Vector3();
+const CAM_DISTANCE = 200; // distance behind player
 
 function updateCamera3D() {
   const pos = worldToScene(player.x, player.y);
-  const dir = player.facingRight ? 1 : -1;
 
-  // Target: slightly ahead of the player
-  camTarget.set(pos.x + dir * 60, pos.y, 0);
+  if (pointerLocked) {
+    // Mouse-look camera: positioned behind player based on yaw/pitch
+    const behindX = -Math.sin(playerYaw) * CAM_DISTANCE;
+    const behindZ = -Math.cos(playerYaw) * CAM_DISTANCE;
+    const behindY = Math.sin(playerPitch) * CAM_DISTANCE * 0.5 + 80;
 
-  // Camera position: behind and above and to the side
-  const desiredX = pos.x - dir * 180;
-  const desiredY = pos.y + 120;
-  const desiredZ = 280;
+    const desiredX = pos.x + behindX;
+    const desiredY = pos.y + behindY;
+    const desiredZ = behindZ;
 
-  // Smooth follow
-  camPos.x += (desiredX - camPos.x) * 0.04;
-  camPos.y += (desiredY - camPos.y) * 0.04;
-  camPos.z += (desiredZ - camPos.z) * 0.04;
+    // Smooth follow
+    camPos.x += (desiredX - camPos.x) * 0.1;
+    camPos.y += (desiredY - camPos.y) * 0.1;
+    camPos.z += (desiredZ - camPos.z) * 0.1;
 
-  camera.position.copy(camPos);
-  camera.lookAt(camTarget);
+    camera.position.copy(camPos);
+
+    // Look at a point ahead of the player in the look direction
+    const lookDist = 100;
+    camTarget.set(
+      pos.x + Math.sin(playerYaw) * lookDist,
+      pos.y - Math.sin(playerPitch) * lookDist,
+      Math.cos(playerYaw) * lookDist
+    );
+    camera.lookAt(camTarget);
+  } else {
+    // Default camera: behind and above, following player facing direction
+    const dir = player.facingRight ? 1 : -1;
+    camTarget.set(pos.x + dir * 60, pos.y, 0);
+    const desiredX = pos.x - dir * 180;
+    const desiredY = pos.y + 120;
+    const desiredZ = 280;
+
+    camPos.x += (desiredX - camPos.x) * 0.04;
+    camPos.y += (desiredY - camPos.y) * 0.04;
+    camPos.z += (desiredZ - camPos.z) * 0.04;
+
+    camera.position.copy(camPos);
+    camera.lookAt(camTarget);
+  }
+
+  // Update fog/scene based on whether camera is above or below water
+  const isAboveWater = camera.position.y > WORLD_H;
+  if (isAboveWater) {
+    scene.fog = new THREE.FogExp2(0xaaccee, 0.00008);
+    scene.background = new THREE.Color(0x87ceeb);
+  } else {
+    scene.fog = new THREE.FogExp2(0x061830, 0.00025);
+    scene.background = new THREE.Color(0x0a2848);
+  }
 }
 
 // ============================================================
@@ -1058,7 +1253,11 @@ function spawnMosasaurus(x, y) {
     turnTimer: Math.random() * 5,
     swimTimer: 0, meatCount: 5,
     aggroRange: 180, damage: 60,
-    respawnTime: 180, respawnX: x, respawnY: y
+    respawnTime: 180, respawnX: x, respawnY: y,
+    airTimer: 120, // seconds until it needs air
+    needsAir: false, // whether it's heading to surface
+    breathingAtSurface: false, // whether it's at the surface breathing
+    breathTimer: 0 // time spent at surface breathing
   });
 }
 
@@ -1167,6 +1366,7 @@ function initEntities() {
   entityMeshMap.clear();
 
   entities = [];
+  // More clams/seashells for bigger map
   for (let x = 50; x < WORLD_W; x += 80 + Math.random() * 120) {
     if (Math.random() > 0.5) {
       spawnClam(x, WORLD_H - 70 + Math.random() * 10);
@@ -1174,23 +1374,42 @@ function initEntities() {
       spawnSeashell(x, WORLD_H - 68 + Math.random() * 8);
     }
   }
-  for (let i = 0; i < 30; i++) {
+  // More clownfish schools (proportional to ~2.5x wider map)
+  for (let i = 0; i < 75; i++) {
     const sx = 200 + Math.random() * (WORLD_W - 400);
     const sy = 100 + Math.random() * (WORLD_H - 250);
     for (let j = 0; j < 3 + Math.floor(Math.random() * 3); j++) {
       spawnClownfish(sx + (Math.random() - 0.5) * 80, sy + (Math.random() - 0.5) * 40);
     }
   }
-  for (let i = 0; i < 20; i++) {
+  // More medium fish
+  for (let i = 0; i < 50; i++) {
     spawnMediumFish(200 + Math.random() * (WORLD_W - 400), 100 + Math.random() * (WORLD_H - 250));
   }
-  const orcaPositions = [[1000, 400], [2500, 300], [4000, 500], [5000, 350], [3000, 600]];
+  // More orcas spread across bigger map
+  const orcaPositions = [
+    [1000, 400], [2500, 300], [4000, 500], [5000, 350], [3000, 700],
+    [7000, 400], [8500, 600], [10000, 300], [11500, 500], [13000, 400],
+    [6000, 800], [9000, 900]
+  ];
   for (const [ox, oy] of orcaPositions) { spawnOrca(ox, oy); }
-  const whalePositions = [[1500, 450], [3500, 350], [5000, 500]];
+  // More whales
+  const whalePositions = [
+    [1500, 450], [3500, 350], [5000, 500], [7500, 400],
+    [9500, 600], [11500, 350], [13500, 500]
+  ];
   for (const [wx, wy] of whalePositions) { spawnWhale(wx, wy); }
-  const megaPositions = [[800, 400], [3000, 300], [5200, 500]];
+  // More megalodons
+  const megaPositions = [
+    [800, 500], [3000, 400], [5200, 600], [7500, 500],
+    [9500, 400], [12000, 600], [14000, 500]
+  ];
   for (const [mx, my] of megaPositions) { spawnMegalodon(mx, my); }
-  const mosaPositions = [[2000, 500], [4500, 350]];
+  // More mosasauruses
+  const mosaPositions = [
+    [2000, 600], [4500, 450], [7000, 500],
+    [10000, 400], [12500, 600]
+  ];
   for (const [mx, my] of mosaPositions) { spawnMosasaurus(mx, my); }
 }
 
@@ -1201,8 +1420,7 @@ const keysDown = {};
 let mouseDown = false;
 let mouseHoldTime = 0;
 
-// Use the renderer's canvas for input
-const gameCanvas = renderer.domElement;
+// gameCanvas already declared in mouse look section above
 // Make overlay handle pointer events for menus
 const overlay = document.getElementById('overlay');
 
@@ -1246,6 +1464,11 @@ function handlePointerDown(e) {
     if (hitBtn(pos, btnX, panelY + 145, btnW, 32)) { gameState = STATE_SHOP; return; }
     return;
   }
+  // If pointer is not locked, first click should lock it (don't bite)
+  if (!pointerLocked && gameState === STATE_PLAYING) {
+    gameCanvas.requestPointerLock();
+    return;
+  }
   mouseDown = true; mouseHoldTime = 0;
 }
 
@@ -1258,6 +1481,13 @@ container.addEventListener('mousedown', handlePointerDown);
 container.addEventListener('mouseup', handlePointerUp);
 container.addEventListener('touchstart', handlePointerDown, { passive: false });
 container.addEventListener('touchend', handlePointerUp);
+// Also listen on document for pointer-locked mouse events
+document.addEventListener('mousedown', (e) => {
+  if (pointerLocked) { mouseDown = true; mouseHoldTime = 0; }
+});
+document.addEventListener('mouseup', (e) => {
+  if (pointerLocked) { mouseDown = false; mouseHoldTime = 0; }
+});
 
 function getClickPos(e) {
   const rect = container.getBoundingClientRect();
@@ -1279,18 +1509,54 @@ function updatePlayerInput() {
 
   player.vx = 0;
   player.vy = 0;
-  if (keysDown['ArrowLeft'] || keysDown['KeyA']) player.vx = -speed;
-  if (keysDown['ArrowRight'] || keysDown['KeyD']) player.vx = speed;
-  if (keysDown['ArrowUp'] || keysDown['KeyW']) player.vy = -speed;
-  if (keysDown['ArrowDown'] || keysDown['KeyS']) player.vy = speed;
 
-  if (player.vx !== 0 && player.vy !== 0) {
-    player.vx *= 0.707;
-    player.vy *= 0.707;
+  if (pointerLocked) {
+    // Mouse-look mode: WASD moves relative to look direction
+    // Forward direction from yaw (in game world: x is horizontal, y is vertical)
+    const forwardX = Math.sin(playerYaw);
+    const forwardY = -Math.sin(playerPitch); // looking up = move up (negative y in game coords)
+    // Right direction (perpendicular to forward in the horizontal plane)
+    const rightX = Math.cos(playerYaw);
+
+    let moveForward = 0;
+    let moveRight = 0;
+    let moveVertical = 0;
+
+    if (keysDown['KeyW'] || keysDown['ArrowUp']) moveForward += 1;
+    if (keysDown['KeyS'] || keysDown['ArrowDown']) moveForward -= 1;
+    if (keysDown['KeyA'] || keysDown['ArrowLeft']) moveRight -= 1;
+    if (keysDown['KeyD'] || keysDown['ArrowRight']) moveRight += 1;
+
+    // Combine directions
+    player.vx = (forwardX * moveForward + rightX * moveRight) * speed;
+    player.vy = (forwardY * moveForward) * speed;
+    // Also allow vertical from W/S based on pitch
+    if (moveRight !== 0 || moveForward !== 0) {
+      // Normalize if diagonal
+      const len = Math.sqrt(player.vx * player.vx + player.vy * player.vy);
+      if (len > speed) {
+        player.vx = (player.vx / len) * speed;
+        player.vy = (player.vy / len) * speed;
+      }
+    }
+
+    // Player faces the look direction
+    player.facingRight = Math.sin(playerYaw) > 0;
+  } else {
+    // Classic mode: WASD cardinal directions
+    if (keysDown['ArrowLeft'] || keysDown['KeyA']) player.vx = -speed;
+    if (keysDown['ArrowRight'] || keysDown['KeyD']) player.vx = speed;
+    if (keysDown['ArrowUp'] || keysDown['KeyW']) player.vy = -speed;
+    if (keysDown['ArrowDown'] || keysDown['KeyS']) player.vy = speed;
+
+    if (player.vx !== 0 && player.vy !== 0) {
+      player.vx *= 0.707;
+      player.vy *= 0.707;
+    }
+
+    if (player.vx > 0) player.facingRight = true;
+    if (player.vx < 0) player.facingRight = false;
   }
-
-  if (player.vx > 0) player.facingRight = true;
-  if (player.vx < 0) player.facingRight = false;
 
   if (player.sprinting && player.staminaLeft > 0) {
     player.staminaLeft -= FIXED_DT;
@@ -1313,10 +1579,34 @@ function updatePlayerInput() {
 
 function updatePlayer() {
   if (!player.alive) return;
+
+  // Check if above water surface (y < 0 means above water in game coords where 0 is the surface level)
+  // Actually in this game: y=0 is top of underwater, y=WORLD_H is bottom/floor
+  // Water surface is at y=0 (top of game area). Negative y = above water.
+  const isAboveWater = player.y < 0;
+
+  if (isAboveWater) {
+    // Apply gravity when above water - pull player back down (increase y toward 0)
+    player.vy += GRAVITY_ABOVE_WATER * FIXED_DT;
+  }
+
   player.x += player.vx;
   player.y += player.vy;
+
+  // Clamp x within world bounds
   player.x = Math.max(20 * player.size, Math.min(WORLD_W - 20 * player.size, player.x));
-  player.y = Math.max(20 * player.size, Math.min(WORLD_H - 60 - 12 * player.size, player.y));
+  // Allow going above water (negative y) but cap how high, and clamp bottom
+  const minY = -ABOVE_WATER_HEIGHT;
+  const maxY = WORLD_H - 60 - 12 * player.size;
+  player.y = Math.max(minY, Math.min(maxY, player.y));
+
+  // Splash detection: crossing y=0 (water surface)
+  const isNowAboveWater = player.y < 0;
+  if (isNowAboveWater !== playerWasAboveWater) {
+    createSplash(player.x, 0);
+  }
+  playerWasAboveWater = isNowAboveWater;
+
   player.swimTimer += FIXED_DT;
 }
 
@@ -1438,7 +1728,7 @@ function updateEntities() {
       }
     }
 
-    if (e.type === 'megalodon' || e.type === 'mosasaurus') {
+    if (e.type === 'megalodon') {
       e.swimTimer += FIXED_DT;
       const dx = player.x - e.x;
       const dy = player.y - e.y;
@@ -1454,13 +1744,83 @@ function updateEntities() {
           e.turnTimer = 3 + Math.random() * 5;
         }
       }
-      const maxSpd = e.type === 'mosasaurus' ? 3.0 : 2.8;
+      const maxSpd = 2.8;
       const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
       if (spd > maxSpd) { e.vx *= maxSpd / spd; e.vy *= maxSpd / spd; }
       e.x += e.vx;
       e.y += e.vy;
       if (e.x < 80 || e.x > WORLD_W - 80) e.vx *= -1;
       if (e.y < 40 || e.y > WORLD_H - 100) e.vy *= -1;
+    }
+
+    if (e.type === 'mosasaurus') {
+      e.swimTimer += FIXED_DT;
+
+      // Air timer logic
+      e.airTimer -= FIXED_DT;
+
+      if (e.breathingAtSurface) {
+        // At the surface breathing
+        e.breathTimer += FIXED_DT;
+        e.y = Math.min(e.y, 20); // stay near surface (y=0 is water surface)
+        e.vy = 0;
+        e.vx *= 0.95; // slow down while breathing
+        if (e.breathTimer >= 3) {
+          // Done breathing, dive back down
+          e.breathingAtSurface = false;
+          e.needsAir = false;
+          e.airTimer = 120;
+          e.vy = 2; // dive down
+          e.turnTimer = 2 + Math.random() * 3;
+        }
+      } else if (e.needsAir || e.airTimer < 20) {
+        // Urgently swim toward surface
+        e.needsAir = true;
+        e.vy -= 0.08; // swim upward (decrease y = toward surface)
+        // Still move horizontally somewhat
+        e.turnTimer -= FIXED_DT;
+        if (e.turnTimer <= 0) {
+          e.vx = (Math.random() - 0.5) * 2;
+          e.turnTimer = 2 + Math.random() * 2;
+        }
+        // Check if reached surface
+        if (e.y <= 15) {
+          e.breathingAtSurface = true;
+          e.breathTimer = 0;
+          e.y = 10;
+          // Create splash when surfacing
+          createSplash(e.x, 0);
+        }
+        const maxSpd = 4.0; // faster when urgent
+        const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+        if (spd > maxSpd) { e.vx *= maxSpd / spd; e.vy *= maxSpd / spd; }
+      } else {
+        // Normal behavior - chase player or wander
+        const dx = player.x - e.x;
+        const dy = player.y - e.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < e.aggroRange && player.alive) {
+          e.vx += dx * 0.003;
+          e.vy += dy * 0.003;
+        } else {
+          e.turnTimer -= FIXED_DT;
+          if (e.turnTimer <= 0) {
+            e.vx = (Math.random() - 0.5) * 4;
+            e.vy = (Math.random() - 0.5) * 1.5;
+            e.turnTimer = 3 + Math.random() * 5;
+          }
+        }
+        const maxSpd = 3.0;
+        const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+        if (spd > maxSpd) { e.vx *= maxSpd / spd; e.vy *= maxSpd / spd; }
+      }
+
+      e.x += e.vx;
+      e.y += e.vy;
+      if (e.x < 80 || e.x > WORLD_W - 80) e.vx *= -1;
+      if (!e.needsAir && !e.breathingAtSurface) {
+        if (e.y < 40 || e.y > WORLD_H - 100) e.vy *= -1;
+      }
     }
   }
   for (let i = entities.length - 1; i >= 0; i--) {
@@ -1672,12 +2032,12 @@ function replenishFood() {
     if (e.type === 'clam' || e.type === 'seashell') clamCount++;
     if (e.type === 'clownfish') clownCount++;
   }
-  if (clamCount < 30) {
+  if (clamCount < 75) {
     const x = Math.random() * WORLD_W;
     if (Math.random() > 0.5) spawnClam(x, WORLD_H - 70 + Math.random() * 10);
     else spawnSeashell(x, WORLD_H - 68 + Math.random() * 8);
   }
-  if (clownCount < 40) {
+  if (clownCount < 100) {
     spawnClownfish(Math.random() * WORLD_W, 100 + Math.random() * (WORLD_H - 250));
   }
 }
@@ -1775,7 +2135,12 @@ function syncMeshes() {
     const pos = worldToScene(player.x, player.y);
     playerMesh.position.set(pos.x, pos.y, 0);
     playerMesh.scale.set(player.size, player.size, player.size);
-    playerMesh.rotation.y = player.facingRight ? 0 : Math.PI;
+    if (pointerLocked) {
+      // Face the look direction
+      playerMesh.rotation.y = playerYaw + Math.PI / 2;
+    } else {
+      playerMesh.rotation.y = player.facingRight ? 0 : Math.PI;
+    }
 
     // Tail wag
     const tail = playerMesh.getObjectByName('tail');
@@ -1908,6 +2273,22 @@ function drawHUD() {
     ctx.font = '11px sans-serif';
     ctx.fillStyle = '#88CCFF';
     ctx.fillText('Family: ON', 155, CANVAS_H - 32);
+  }
+
+  // Pointer lock hint
+  if (!pointerLocked) {
+    ctx.textAlign = 'center';
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillText('Click to enable mouse look', CANVAS_W / 2, CANVAS_H - 15);
+  }
+
+  // Above water indicator
+  if (player.y < 0) {
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#88ddff';
+    ctx.fillText('Above Water!', CANVAS_W / 2, 55);
   }
 
   ctx.restore();
@@ -2080,7 +2461,7 @@ function drawTitleScreen() {
 
   ctx.font = '11px sans-serif';
   ctx.fillStyle = '#556677';
-  ctx.fillText('WASD to swim \u00B7 Shift to sprint \u00B7 Click to bite \u00B7 F for family', CANVAS_W / 2, CANVAS_H / 2 + 70);
+  ctx.fillText('Click to look \u00B7 WASD swim \u00B7 Shift sprint \u00B7 Click bite \u00B7 F family', CANVAS_W / 2, CANVAS_H / 2 + 70);
 
   ctx.restore();
 }
@@ -2165,6 +2546,7 @@ function gameLoop(timestamp) {
 
   // Animate environment
   animateLightRays(timestamp);
+  updateSplashParticles();
 
   // Render 3D scene
   renderer.render(scene, camera);
