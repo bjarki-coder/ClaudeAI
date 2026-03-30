@@ -170,6 +170,32 @@ function spawnWhale(x, y) {
   });
 }
 
+function spawnMegalodon(x, y) {
+  entities.push({
+    type: 'megalodon', x, y,
+    vx: (Math.random() > 0.5 ? 1 : -1) * 2, vy: 0,
+    size: 4.0, health: 600, maxHealth: 600,
+    coins: 80, bfGain: 5, hpGain: 8, sizeGain: 0.05,
+    turnTimer: Math.random() * 5,
+    swimTimer: 0, meatCount: 5,
+    aggroRange: 500, damage: 40,
+    respawnTime: 120, respawnX: x, respawnY: y
+  });
+}
+
+function spawnMosasaurus(x, y) {
+  entities.push({
+    type: 'mosasaurus', x, y,
+    vx: (Math.random() > 0.5 ? 1 : -1) * 2.5, vy: 0,
+    size: 5.5, health: 1000, maxHealth: 1000,
+    coins: 150, bfGain: 5, hpGain: 8, sizeGain: 0.08,
+    turnTimer: Math.random() * 5,
+    swimTimer: 0, meatCount: 5,
+    aggroRange: 600, damage: 60,
+    respawnTime: 180, respawnX: x, respawnY: y
+  });
+}
+
 function initEntities() {
   entities = [];
   for (let x = 50; x < WORLD_W; x += 80 + Math.random() * 120) {
@@ -196,6 +222,12 @@ function initEntities() {
   // Whales
   const whalePositions = [[1500, 450], [3500, 350], [5000, 500]];
   for (const [wx, wy] of whalePositions) { spawnWhale(wx, wy); }
+  // Megalodons
+  const megaPositions = [[800, 400], [3000, 300], [5200, 500]];
+  for (const [mx, my] of megaPositions) { spawnMegalodon(mx, my); }
+  // Mosasaurus
+  const mosaPositions = [[2000, 500], [4500, 350]];
+  for (const [mx, my] of mosaPositions) { spawnMosasaurus(mx, my); }
 }
 
 // ============================================================
@@ -595,6 +627,114 @@ function drawWhale(x, y, s, vx, swimTimer) {
   ctx.restore();
 }
 
+function drawMegalodon(x, y, s, vx, swimTimer) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (vx < 0) ctx.scale(-1, 1);
+  const sc = s * 0.35;
+  const tw = Math.sin(swimTimer * 4) * 0.15;
+  ctx.fillStyle = '#4A5A6A';
+  ctx.beginPath();
+  ctx.moveTo(-28 * sc, 0);
+  ctx.lineTo(-42 * sc, (-14 + tw * 14) * sc);
+  ctx.lineTo(-42 * sc, (14 + tw * 14) * sc);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 30 * sc, 14 * sc, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#5A6A7A';
+  ctx.fill();
+  ctx.fillStyle = '#8A9AAA';
+  ctx.beginPath();
+  ctx.ellipse(4 * sc, 5 * sc, 22 * sc, 7 * sc, 0, 0, Math.PI);
+  ctx.fill();
+  ctx.fillStyle = '#4A5A6A';
+  ctx.beginPath();
+  ctx.moveTo(-4 * sc, -14 * sc);
+  ctx.lineTo(6 * sc, -26 * sc);
+  ctx.lineTo(12 * sc, -14 * sc);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#3A4A5A';
+  ctx.beginPath();
+  ctx.moveTo(22 * sc, 4 * sc);
+  ctx.lineTo(32 * sc, 6 * sc);
+  ctx.lineTo(22 * sc, 10 * sc);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'white';
+  for (let t = 0; t < 5; t++) {
+    ctx.beginPath();
+    ctx.arc(24 * sc + t * 1.5 * sc, 5 * sc, 1 * sc, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(16 * sc, -3 * sc, 2.5 * sc, 0, Math.PI * 2);
+  ctx.fillStyle = '#CC0000';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(16.5 * sc, -3 * sc, 1.2 * sc, 0, Math.PI * 2);
+  ctx.fillStyle = 'black';
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawMosasaurus(x, y, s, vx, swimTimer) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (vx < 0) ctx.scale(-1, 1);
+  const sc = s * 0.3;
+  const tw = Math.sin(swimTimer * 3) * 0.12;
+  ctx.fillStyle = '#2A4A2A';
+  ctx.beginPath();
+  ctx.moveTo(-30 * sc, 0);
+  ctx.quadraticCurveTo(-45 * sc, tw * 20 * sc, -55 * sc, tw * 15 * sc);
+  ctx.quadraticCurveTo(-45 * sc, tw * 10 * sc + 5 * sc, -30 * sc, 4 * sc);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 32 * sc, 12 * sc, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#3A6A3A';
+  ctx.fill();
+  ctx.fillStyle = '#6A9A6A';
+  ctx.beginPath();
+  ctx.ellipse(5 * sc, 5 * sc, 24 * sc, 6 * sc, 0, 0, Math.PI);
+  ctx.fill();
+  ctx.fillStyle = '#2A5A2A';
+  ctx.beginPath();
+  ctx.ellipse(-8 * sc, 10 * sc, 10 * sc, 3 * sc, 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(8 * sc, 10 * sc, 10 * sc, 3 * sc, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#3A6A3A';
+  ctx.beginPath();
+  ctx.ellipse(26 * sc, -1 * sc, 12 * sc, 7 * sc, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#2A4A2A';
+  ctx.beginPath();
+  ctx.moveTo(30 * sc, 2 * sc);
+  ctx.lineTo(40 * sc, 3 * sc);
+  ctx.lineTo(30 * sc, 6 * sc);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'white';
+  for (let t = 0; t < 6; t++) {
+    ctx.beginPath();
+    ctx.arc(31 * sc + t * 1.5 * sc, 3 * sc, 0.8 * sc, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(30 * sc, -3 * sc, 2.5 * sc, 0, Math.PI * 2);
+  ctx.fillStyle = '#FFCC00';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(30.5 * sc, -3 * sc, 1.2 * sc, 0, Math.PI * 2);
+  ctx.fillStyle = 'black';
+  ctx.fill();
+  ctx.restore();
+}
+
 function updateEntities() {
   for (const e of entities) {
     if (e.type === 'clownfish') {
@@ -695,6 +835,31 @@ function updateEntities() {
         }
       }
     }
+
+    if (e.type === 'megalodon' || e.type === 'mosasaurus') {
+      e.swimTimer += FIXED_DT;
+      const dx = player.x - e.x;
+      const dy = player.y - e.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < e.aggroRange && player.alive) {
+        e.vx += dx * 0.003;
+        e.vy += dy * 0.003;
+      } else {
+        e.turnTimer -= FIXED_DT;
+        if (e.turnTimer <= 0) {
+          e.vx = (Math.random() - 0.5) * 4;
+          e.vy = (Math.random() - 0.5) * 1.5;
+          e.turnTimer = 3 + Math.random() * 5;
+        }
+      }
+      const maxSpd = e.type === 'mosasaurus' ? 3.0 : 2.8;
+      const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+      if (spd > maxSpd) { e.vx *= maxSpd / spd; e.vy *= maxSpd / spd; }
+      e.x += e.vx;
+      e.y += e.vy;
+      if (e.x < 80 || e.x > WORLD_W - 80) e.vx *= -1;
+      if (e.y < 40 || e.y > WORLD_H - 100) e.vy *= -1;
+    }
   }
   // Remove dead entities
   for (let i = entities.length - 1; i >= 0; i--) {
@@ -747,6 +912,8 @@ function updateBiteCollision() {
             player.size += e.sizeGain;
             localStorage.setItem('deepFeastCoins', player.coins);
           }
+          if (e.type === 'megalodon') localStorage.setItem('deepFeastMegaKill', '1');
+          if (e.type === 'mosasaurus') localStorage.setItem('deepFeastMosaKill', '1');
           entities.splice(i, 1);
         }
       }
@@ -808,6 +975,8 @@ function gameLoop(timestamp) {
     else if (e.type === 'medfish') drawMediumFish(sx, sy, e.size, e.vx, e.swimTimer || 0, e.color);
     else if (e.type === 'orca') drawOrca(sx, sy, e.size, e.vx, e.swimTimer || 0);
     else if (e.type === 'whale') drawWhale(sx, sy, e.size, e.vx, e.swimTimer || 0);
+    else if (e.type === 'megalodon') drawMegalodon(sx, sy, e.size, e.vx, e.swimTimer || 0);
+    else if (e.type === 'mosasaurus') drawMosasaurus(sx, sy, e.size, e.vx, e.swimTimer || 0);
   }
 
   drawPiranha(player.x - camX, player.y - camY, player.size, player.facingRight, player.swimTimer, 'normal', player.biting, player.biteCharged, player.canHitSomething);
