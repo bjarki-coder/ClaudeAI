@@ -988,6 +988,88 @@ function updateFamily() {
   }
 }
 
+function drawHUD() {
+  ctx.save();
+
+  // Coins (top-left)
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.roundRect(10, 10, 100, 30, 8);
+  ctx.fill();
+  ctx.font = 'bold 16px sans-serif';
+  ctx.fillStyle = '#FFD700';
+  ctx.textAlign = 'left';
+  ctx.fillText('\u{1FA99} ' + player.coins, 20, 31);
+
+  // Sprint bar (top-right)
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.roundRect(CANVAS_W - 140, 10, 130, 30, 8);
+  ctx.fill();
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.textAlign = 'left';
+  ctx.fillText('Sprint', CANVAS_W - 130, 23);
+  const barX = CANVAS_W - 130;
+  const barY = 27;
+  const barW = 110;
+  const barH = 7;
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.roundRect(barX, barY, barW, barH, 3);
+  ctx.fill();
+  const pct = player.staminaLeft / SPRINT_MAX;
+  if (pct > 0) {
+    const grad = ctx.createLinearGradient(barX, 0, barX + barW * pct, 0);
+    grad.addColorStop(0, player.sprinting ? '#FF8800' : '#00BFFF');
+    grad.addColorStop(1, player.sprinting ? '#FF4400' : '#00FF88');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW * pct, barH, 3);
+    ctx.fill();
+  }
+
+  // Stats (bottom-left)
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.roundRect(10, CANVAS_H - 50, 200, 40, 8);
+  ctx.fill();
+
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = 'white';
+  ctx.textAlign = 'left';
+  ctx.fillText('Bite: ' + Math.floor(player.biteForce), 20, CANVAS_H - 32);
+
+  // Health bar
+  ctx.fillText('HP', 20, CANVAS_H - 17);
+  const hpX = 42;
+  const hpY = CANVAS_H - 25;
+  const hpW = 100;
+  const hpH = 10;
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.roundRect(hpX, hpY, hpW, hpH, 3);
+  ctx.fill();
+  const hpPct = player.health / player.maxHealth;
+  ctx.fillStyle = hpPct > 0.5 ? '#44CC44' : (hpPct > 0.25 ? '#CCAA22' : '#CC3333');
+  ctx.beginPath();
+  ctx.roundRect(hpX, hpY, hpW * hpPct, hpH, 3);
+  ctx.fill();
+
+  ctx.font = '10px sans-serif';
+  ctx.fillStyle = '#AAAAAA';
+  ctx.fillText(Math.floor(player.health) + '/' + Math.floor(player.maxHealth), hpX + hpW + 8, CANVAS_H - 16);
+
+  // Family indicator
+  if (familyActive) {
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#88CCFF';
+    ctx.fillText('Family: ON', 155, CANVAS_H - 32);
+  }
+
+  ctx.restore();
+}
+
 // ============================================================
 // GAME LOOP
 // ============================================================
@@ -1038,6 +1120,8 @@ function gameLoop(timestamp) {
   }
 
   drawPiranha(player.x - camX, player.y - camY, player.size, player.facingRight, player.swimTimer, 'normal', player.biting, player.biteCharged, player.canHitSomething);
+
+  drawHUD();
 
   requestAnimationFrame(gameLoop);
 }
