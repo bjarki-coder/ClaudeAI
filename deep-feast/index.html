@@ -97,6 +97,22 @@ let player = {
 // ============================================================
 let entities = [];
 
+// ============================================================
+// FAMILY
+// ============================================================
+let family = [];
+let familyActive = true;
+
+function initFamily() {
+  family = [];
+  const s = player.size;
+  for (let i = 0; i < 4; i++) {
+    family.push({ role: 'brother', x: player.x - 40 - i * 25, y: player.y + (i - 1.5) * 20, size: s, speedMult: 1.6, swimTimer: Math.random() * 5 });
+  }
+  family.push({ role: 'dad', x: player.x - 60, y: player.y - 30, size: s * 1.2, speedMult: 1.0, swimTimer: Math.random() * 5 });
+  family.push({ role: 'mom', x: player.x - 60, y: player.y + 30, size: s * 1.0, speedMult: 1.0, swimTimer: Math.random() * 5 });
+}
+
 function spawnClam(x, y) {
   entities.push({ type: 'clam', x, y, vx: 0, vy: 0, size: 0.6, health: 5, maxHealth: 5, coins: 2, bfGain: 1, hpGain: 2, sizeGain: 0.002 });
 }
@@ -241,6 +257,9 @@ document.addEventListener('keydown', (e) => {
   keysDown[e.code] = true;
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
     player.sprinting = !player.sprinting;
+  }
+  if (e.code === 'KeyF') {
+    familyActive = !familyActive;
   }
 });
 document.addEventListener('keyup', (e) => { keysDown[e.code] = false; });
@@ -940,6 +959,35 @@ function updateEnemyDamage() {
   }
 }
 
+function updateFamily() {
+  if (!player.alive) return;
+  for (let i = 0; i < family.length; i++) {
+    const f = family[i];
+    f.swimTimer += FIXED_DT;
+
+    if (familyActive) {
+      const offsetX = -30 - (i % 3) * 25;
+      const offsetY = (i - family.length / 2) * 20;
+      const targetX = player.x + (player.facingRight ? offsetX : -offsetX);
+      const targetY = player.y + offsetY;
+      const dx = targetX - f.x;
+      const dy = targetY - f.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 5) {
+        const spd = PLAYER_SPEED * f.speedMult;
+        f.x += (dx / dist) * Math.min(spd, dist * 0.1);
+        f.y += (dy / dist) * Math.min(spd, dist * 0.1);
+      }
+    } else {
+      f.x += Math.sin(f.swimTimer * 2 + i) * 0.3;
+      f.y += Math.cos(f.swimTimer * 1.5 + i) * 0.2;
+    }
+
+    f.x = Math.max(20, Math.min(WORLD_W - 20, f.x));
+    f.y = Math.max(20, Math.min(WORLD_H - 80, f.y));
+  }
+}
+
 // ============================================================
 // GAME LOOP
 // ============================================================
@@ -952,6 +1000,7 @@ function gameLoop(timestamp) {
     accumulator -= FIXED_DT;
     updatePlayerInput();
     updatePlayer();
+    updateFamily();
     updateEntities();
     updateBiteCollision();
     updateEnemyDamage();
@@ -979,12 +1028,22 @@ function gameLoop(timestamp) {
     else if (e.type === 'mosasaurus') drawMosasaurus(sx, sy, e.size, e.vx, e.swimTimer || 0);
   }
 
+  // Draw family
+  for (const f of family) {
+    const fx = f.x - camX;
+    const fy = f.y - camY;
+    if (fx < -60 || fx > CANVAS_W + 60 || fy < -60 || fy > CANVAS_H + 60) continue;
+    const facingRight = f.x < player.x ? true : (f.x > player.x ? false : player.facingRight);
+    drawPiranha(fx, fy, f.size, facingRight, f.swimTimer, 'normal', false, false, false);
+  }
+
   drawPiranha(player.x - camX, player.y - camY, player.size, player.facingRight, player.swimTimer, 'normal', player.biting, player.biteCharged, player.canHitSomething);
 
   requestAnimationFrame(gameLoop);
 }
 
 initEntities();
+initFamily();
 requestAnimationFrame((t) => { lastTime = t; gameLoop(t); });
 </script>
 </body>
