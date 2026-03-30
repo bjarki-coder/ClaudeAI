@@ -1,54 +1,109 @@
 # Current State
 
-## Project: Mountain Hawk
-A realistic Flappy Bird clone — a hawk soaring through themed worlds. Built as a single HTML file (`mountain-hawk/index.html`) with zero dependencies.
+## Two Games Built
 
-## Tech Stack
-- HTML5 Canvas 2D (600x600 square, CSS-scaled to 90vh)
-- Web Audio API (all sounds procedural, no external files)
-- Vanilla JavaScript
-- localStorage for persistence
+---
 
-## What's Built
-- **Core game**: Gravity, flap physics, rotation, collision detection
-- **Parallax background**: 5-layer scrolling (sky, far mountains, near mountains, trees, ground)
-- **Hawk**: Round Flappy-Bird-style body with realistic hawk details (hooked beak, eyebrow stripe, tail feathers)
-- **Obstacles**: Rock pillars with shrinking gap (starts 130px, -1.5px per score, min 70px)
-- **Particles**: Ambient particles per world (snow/leaves/dust/moon dust)
-- **Death effects**: Feather burst, screen flash, hawk tumble
-- **Audio**: Wind loop, flap whoosh, score chime, hawk cry (random 8-15s), collision thud
-- **Scroll speed**: 3px per frame
+## Game 1: Mountain Hawk
+A realistic Flappy Bird clone — a hawk soaring through themed worlds.
 
-## Menu System
-- **Game Over menu**: 3 buttons — Retry, Skins, Worlds
-- **6 Skins** (all unlocked): Hawk, Fire Bird, Ice Bird, Robo Bird, Rainbow (color-shifting), Ghost (transparent)
-- **4 Worlds** (all unlocked): Snowy Mountains, Forest, Desert, Moon
-- Selections persisted to localStorage
+**File:** `mountain-hawk/index.html` (~1400 lines)
+**Tech:** HTML5 Canvas 2D, Web Audio API, vanilla JS, localStorage
+**Status:** Complete and polished
 
-## World Details
-- **Snowy Mountains**: Blue sky, clouds (snow falls from them), snow-capped mountains, pine trees, white ground, snowflakes
-- **Forest**: Blue-green sky, green hills, round trees, grass ground, leaf particles
-- **Desert**: Orange sky, sand dunes, cacti, sandy ground, dust particles
-- **Moon**: Black starry sky, sun (top-left with glow), Earth (top-right), no mountains, craters in ground, upward-floating dust
+### Features
+- Core flappy bird mechanics with realistic hawk
+- 5-layer parallax scrolling background
+- 6 skins: Hawk, Fire Bird, Ice Bird, Robo Bird, Rainbow, Ghost
+- 4 worlds: Snowy Mountains (with clouds), Forest, Desert, Moon (with sun, craters)
+- Shrinking gap difficulty (130px → 70px)
+- Procedural audio, death effects, mobile-friendly
+- Game Over menu with Retry/Skins/Worlds
 
-## Architecture
-Single file `mountain-hawk/index.html` (~1400 lines). Organized into sections:
-CONSTANTS → SKINS → WORLDS → CANVAS SETUP → GAME STATE → AUDIO → INPUT → PHYSICS → DRAWING FUNCTIONS → GAME LOOP
+### Specs & Plans
+- `docs/superpowers/specs/2026-03-29-mountain-hawk-design.md`
+- `docs/superpowers/specs/2026-03-29-menu-skins-worlds-design.md`
+- `docs/superpowers/plans/2026-03-29-mountain-hawk.md`
+- `docs/superpowers/plans/2026-03-29-menu-skins-worlds.md`
 
-## Key Visual Details
-- Pillar caps removed (flat edges)
-- Clouds in snow world with snowflakes spawning from cloud layer
-- Mobile-friendly CSS (full width on small screens)
-- Fixed timestep physics (consistent speed on 60Hz and 120Hz)
+---
 
-## Specs & Plans
-- `docs/superpowers/specs/2026-03-29-mountain-hawk-design.md` — original game spec
-- `docs/superpowers/specs/2026-03-29-menu-skins-worlds-design.md` — menu/skins/worlds spec
-- `docs/superpowers/plans/2026-03-29-mountain-hawk.md` — original 10-task build plan
-- `docs/superpowers/plans/2026-03-29-menu-skins-worlds.md` — 6-task menu plan
+## Game 2: Deep Feast
+A 3D ocean survival game — eat fish, grow bigger, avoid bosses, buy new fish.
+
+**File:** `deep-feast/index.html` (~2500+ lines)
+**Tech:** Three.js (CDN r128), Web Audio API, vanilla JS, localStorage
+**Status:** Complete with major features, actively being expanded
+
+### Core Gameplay
+- 3D underwater world (15000 x 1200) with Three.js rendering
+- Mouse look (pointer lock) — FPS-style camera control
+- WASD movement relative to look direction
+- Sprint toggle (Shift), 13s stamina bar
+
+### Bite & Combat
+- Hold left click to bite — teeth appear on bite range outline (5 teeth, yellow when in range)
+- 2-second charge for 1.5x damage
+- Bite latch — attach to living fish, deal continuous damage, auto-release after 2s
+- Fish-vs-fish AI combat — predators eat prey, drop stealable meat
+
+### Entities & AI
+- Clams, seashells (ocean floor food)
+- Clownfish (schools, free food)
+- Medium fish (flee or chase based on size comparison)
+- Orcas (aggressive patrol, short aggro range ~120px)
+- Whales (passive, suck attack)
+- Megalodons (3→7 on map, aggro range ~150px, kill to unlock in shop)
+- Mosasaurus (2→5 on map, aggro range ~180px, kill to unlock, NEEDS AIR every 2 min — surfaces to breathe)
+
+### Meat System
+- Killed fish drop meat pieces based on size
+- Big meat can be chopped down by biting it
+- Eating gives coins + auto-stat increases (bite force, health, size — gradual increments)
+
+### Family System
+- Piranha only: 4 brothers (1.6x faster), 1 dad (bigger), 1 mom (same size)
+- Toggle with F key
+- Other fish have no family
+
+### Shop (5 fish)
+- Piranha: free, 2 skins (normal + skeleton)
+- Bass: 50 coins
+- Whale: 150 coins (suck attack)
+- Megalodon: 200 coins + must kill one
+- Mosasaurus: 500 coins + must kill one
+- Death keeps coins + unlocks, lose size/stats
+
+### Surface World
+- Can jump out of water — gravity pulls back down
+- Above water: sky, bright sun with glow, beach with sand/vegetation/trees
+- Splash particles when crossing water surface
+- Mosasaurus surfaces every 2 minutes to breathe
+
+### 3D Environment
+- Procedural 3D fish meshes (piranha, clownfish, orca, whale, megalodon, mosasaurus)
+- Coral reef on ocean floor (spheres, cylinders, cones in bright colors)
+- Underwater fog, light rays, bubbles floating up
+- Beach/land along one edge with trees
+- Health bars on large enemies
+
+### Audio
+- Underwater ambient drone
+- Bite crunch, coin chime, damage thud
+- All procedural Web Audio API
+
+### Specs & Plans
+- `docs/superpowers/specs/2026-03-29-deep-feast-design.md`
+- `docs/superpowers/plans/2026-03-29-deep-feast.md`
+
+---
+
+## GitHub Pages
+Both games available at:
+- `https://bjarki-coder.github.io/ClaudeAI/mountain-hawk/`
+- `https://bjarki-coder.github.io/ClaudeAI/deep-feast/`
 
 ## Next likely tasks
-- More skins or worlds
-- Power-ups or collectibles
-- More game modes
-- Another 2D browser game
+- More Deep Feast features (new fish, biomes, abilities)
+- New game ideas
+- Shared game launcher page

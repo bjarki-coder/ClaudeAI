@@ -29,3 +29,29 @@
 
 - Decision: Pillar caps removed (flat edges on pillars).
 - Why: Bjarki's preference for cleaner look.
+
+### Deep Feast Decisions
+
+- Decision: Started as 2D Canvas, then rebuilt as full 3D with Three.js (CDN).
+- Why: Bjarki requested progressively more immersive views — side view → behind-the-fish → full 3D.
+
+- Decision: Three.js loaded from CDN (r128), still single HTML file.
+- Why: Keeps the single-file simplicity while enabling real 3D.
+
+- Decision: Enemies have short aggro ranges (120-180px), not long-range.
+- Why: Bjarki wanted to explore safely and choose when to engage, not get rushed.
+
+- Decision: Family is piranha-exclusive.
+- Why: Bjarki's request — other fish (Bass, Whale, Megalodon, Mosasaurus) don't get family.
+
+- Decision: Mosasaurus needs air every 2 minutes (surfaces to breathe).
+- Why: Bjarki's idea for realistic behavior and surface encounter opportunities.
+
+- Decision: Bite teeth are on the range outline/arc, not on the fish body.
+- Why: Bjarki's preference — 5 big teeth on the bite indicator ring.
+
+- Decision: Mouse look with pointer lock for camera control.
+- Why: Bjarki wanted FPS-style free look in 3D.
+
+- Decision: Player can jump out of water, sees beach/sun/sky above.
+- Why: Bjarki's idea for a surface world with land visible.
