@@ -687,77 +687,61 @@ function drawPiranha(x, y, size, facingRight, swimTimer, skin, biting, biteCharg
 
   // Mouth and bite visuals
   if (biting) {
-    const mouthColor = canHit ? '#FFD700' : (skin === 'skeleton' ? '#3A2A1A' : '#440000');
     const teethColor = canHit ? '#FFD700' : '#FFFFFF';
-    const jawOpen = Math.min(1, mouseHoldTime * 3); // opens over 0.3s
+    const arcColor = canHit ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.2)';
+    const r = BITE_RANGE * s;
+    const cx = 20 * s;
+    const cy = 0;
 
-    // Upper jaw
-    ctx.fillStyle = skin === 'skeleton' ? '#D0C8B8' : '#CC3300';
+    // Bite range arc — upper jaw outline
+    ctx.strokeStyle = biteCharged ? 'rgba(255,215,0,0.6)' : arcColor;
+    ctx.lineWidth = biteCharged ? 3 : 2;
     ctx.beginPath();
-    ctx.moveTo(14 * s, -2 * s);
-    ctx.lineTo(22 * s, -2 * s - jawOpen * 4 * s);
-    ctx.lineTo(24 * s, 0);
-    ctx.lineTo(14 * s, 0);
-    ctx.closePath();
-    ctx.fill();
-
-    // Lower jaw
-    ctx.beginPath();
-    ctx.moveTo(14 * s, 2 * s);
-    ctx.lineTo(22 * s, 2 * s + jawOpen * 5 * s);
-    ctx.lineTo(24 * s, 2 * s);
-    ctx.lineTo(14 * s, 2 * s);
-    ctx.closePath();
-    ctx.fill();
-
-    // Mouth interior (dark)
-    ctx.fillStyle = mouthColor;
-    ctx.beginPath();
-    ctx.moveTo(14 * s, -1 * s);
-    ctx.lineTo(21 * s, -1 * s - jawOpen * 3 * s);
-    ctx.lineTo(21 * s, 1 * s + jawOpen * 4 * s);
-    ctx.lineTo(14 * s, 3 * s);
-    ctx.closePath();
-    ctx.fill();
-
-    // Upper teeth (sharp triangles)
-    ctx.fillStyle = teethColor;
-    for (let t = 0; t < 5; t++) {
-      const tx = (15 + t * 1.4) * s;
-      const tBase = -1 * s - jawOpen * 3 * s * (1 - t * 0.15);
-      ctx.beginPath();
-      ctx.moveTo(tx - 0.8 * s, tBase);
-      ctx.lineTo(tx, tBase + 2.5 * s);
-      ctx.lineTo(tx + 0.8 * s, tBase);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Lower teeth (sharp triangles pointing up)
-    for (let t = 0; t < 5; t++) {
-      const tx = (15 + t * 1.4) * s;
-      const tBase = 2 * s + jawOpen * 4 * s * (1 - t * 0.15);
-      ctx.beginPath();
-      ctx.moveTo(tx - 0.8 * s, tBase);
-      ctx.lineTo(tx, tBase - 2.5 * s);
-      ctx.lineTo(tx + 0.8 * s, tBase);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Bite range arc
-    ctx.strokeStyle = biteCharged ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = biteCharged ? 2.5 : 1.5;
-    ctx.beginPath();
-    ctx.arc(20 * s, 0, BITE_RANGE * s, -0.8, 0.8);
+    ctx.arc(cx, cy, r, -0.8, 0);
     ctx.stroke();
+
+    // Bite range arc — lower jaw outline
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, 0.8);
+    ctx.stroke();
+
+    // Teeth on the upper arc (pointing inward/down)
+    ctx.fillStyle = teethColor;
+    for (let t = 0; t < 6; t++) {
+      const angle = -0.7 + t * 0.12;
+      const bx = cx + Math.cos(angle) * r;
+      const by = cy + Math.sin(angle) * r;
+      const inX = cx + Math.cos(angle) * (r - 5 * s);
+      const inY = cy + Math.sin(angle) * (r - 5 * s);
+      ctx.beginPath();
+      ctx.moveTo(bx - Math.sin(angle) * 1.2 * s, by + Math.cos(angle) * 1.2 * s);
+      ctx.lineTo(inX, inY);
+      ctx.lineTo(bx + Math.sin(angle) * 1.2 * s, by - Math.cos(angle) * 1.2 * s);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Teeth on the lower arc (pointing inward/up)
+    for (let t = 0; t < 6; t++) {
+      const angle = 0.1 + t * 0.12;
+      const bx = cx + Math.cos(angle) * r;
+      const by = cy + Math.sin(angle) * r;
+      const inX = cx + Math.cos(angle) * (r - 5 * s);
+      const inY = cy + Math.sin(angle) * (r - 5 * s);
+      ctx.beginPath();
+      ctx.moveTo(bx - Math.sin(angle) * 1.2 * s, by + Math.cos(angle) * 1.2 * s);
+      ctx.lineTo(inX, inY);
+      ctx.lineTo(bx + Math.sin(angle) * 1.2 * s, by - Math.cos(angle) * 1.2 * s);
+      ctx.closePath();
+      ctx.fill();
+    }
 
     // Charged glow pulse
     if (biteCharged) {
       ctx.strokeStyle = `rgba(255,215,0,${0.2 + Math.sin(swimTimer * 10) * 0.15})`;
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.arc(20 * s, 0, (BITE_RANGE + 5) * s, -0.8, 0.8);
+      ctx.arc(cx, cy, r + 5 * s, -0.8, 0.8);
       ctx.stroke();
     }
   }
