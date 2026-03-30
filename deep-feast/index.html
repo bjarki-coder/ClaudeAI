@@ -66,6 +66,37 @@ function updateCamera(targetX, targetY) {
 }
 
 // ============================================================
+// PERSPECTIVE PROJECTION (behind-the-fish 3D view)
+// ============================================================
+const VIEW_DIST = 500;      // how far ahead you can see in world units
+const BEHIND_DIST = 80;     // how far behind the player is still visible
+const VANISH_X = CANVAS_W / 2; // vanishing point X
+const VANISH_Y = CANVAS_H * 0.18; // vanishing point Y (horizon line)
+const GROUND_Y = CANVAS_H * 0.92; // where the ground plane meets the screen bottom
+
+function projectToScreen(worldX, worldY) {
+  // depth = how far ahead of the player (positive = ahead, negative = behind)
+  const depth = player.y - worldY;
+
+  if (depth < -BEHIND_DIST || depth > VIEW_DIST) return null;
+
+  // t: 0 = at/behind player, 1 = far away at horizon
+  const t = Math.max(0, (depth + BEHIND_DIST) / (VIEW_DIST + BEHIND_DIST));
+
+  // Perspective scale: near = large, far = small
+  // Use a non-linear curve for more dramatic perspective
+  const perspective = 1.0 - t * 0.85;
+
+  // Screen X: offset from center based on world X difference, scaled by perspective
+  const sx = VANISH_X + (worldX - player.x) * perspective * 0.9;
+
+  // Screen Y: interpolate between ground (near) and vanishing point (far)
+  const sy = GROUND_Y + (VANISH_Y - GROUND_Y) * t;
+
+  return { sx, sy, scale: perspective, t };
+}
+
+// ============================================================
 // GAME STATE
 // ============================================================
 const STATE_PLAYING = 0;
@@ -556,71 +587,154 @@ function updateBubbles() {
 
 function drawBubbles() {
   for (const b of bubbles) {
-    const sx = b.x - camX;
-    const sy = b.y - camY;
-    if (sx < -10 || sx > CANVAS_W + 10 || sy < -10 || sy > CANVAS_H + 10) continue;
+    const proj = projectToScreen(b.x, b.y);
+    if (!proj) continue;
+    if (proj.sx < -10 || proj.sx > CANVAS_W + 10 || proj.sy < -10 || proj.sy > CANVAS_H + 10) continue;
+    const r = b.r * proj.scale;
+    if (r < 0.3) continue;
     ctx.beginPath();
-    ctx.arc(sx, sy, b.r, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-    ctx.lineWidth = 0.8;
+    ctx.arc(proj.sx, proj.sy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,255,255,${0.25 * proj.scale})`;
+    ctx.lineWidth = 0.8 * proj.scale;
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillStyle = `rgba(255,255,255,${0.06 * proj.scale})`;
     ctx.fill();
   }
 }
 
 function drawOceanBackground() {
-  const grad = ctx.createLinearGradient(0, -camY, 0, WORLD_H - camY);
-  grad.addColorStop(0, '#2898E0');
-  grad.addColorStop(0.3, '#1E80C8');
+  // Deep blue gradient: light at bottom (near), dark at top (far/deep)
+  const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+  grad.addColorStop(0, '#061830');   // far away - very dark deep blue
+  grad.addColorStop(0.15, '#0A2848');
+  grad.addColorStop(0.4, '#0E4070');
   grad.addColorStop(0.7, '#1668A8');
-  grad.addColorStop(1, '#0E5090');
+  grad.addColorStop(1, '#2090D0');   // near player - lighter blue
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-  // Light rays from top
+  // Light rays converging to vanishing point
   ctx.save();
-  ctx.globalAlpha = 0.06;
-  for (let i = 0; i < 5; i++) {
-    const rx = (i * 180 + 50 - camX * 0.05) % (CANVAS_W + 200) - 100;
+  for (let i = 0; i < 7; i++) {
+    const angle = ((i - 3) * 0.14) + Math.sin(Date.now() * 0.0003 + i) * 0.02;
+    const rayLen = CANVAS_H * 0.95;
+    const baseX = VANISH_X + Math.sin(angle) * rayLen;
+    const baseW = 30 + i * 8;
+    ctx.globalAlpha = 0.035 + Math.sin(Date.now() * 0.001 + i * 1.2) * 0.015;
     ctx.beginPath();
-    ctx.moveTo(rx, -camY);
-    ctx.lineTo(rx - 40, CANVAS_H);
-    ctx.lineTo(rx + 40, CANVAS_H);
+    ctx.moveTo(VANISH_X, VANISH_Y);
+    ctx.lineTo(baseX - baseW, CANVAS_H);
+    ctx.lineTo(baseX + baseW, CANVAS_H);
     ctx.closePath();
-    ctx.fillStyle = '#FFFFCC';
+    ctx.fillStyle = '#88CCFF';
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Subtle caustic light pattern on the "water surface" near player
+  ctx.save();
+  ctx.globalAlpha = 0.03;
+  for (let i = 0; i < 12; i++) {
+    const cx = (i * 55 + Date.now() * 0.01 * (i % 3 + 1)) % (CANVAS_W + 40) - 20;
+    const cy = CANVAS_H * 0.7 + Math.sin(Date.now() * 0.002 + i) * 30;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 20 + i * 3, 8, 0.3, 0, Math.PI * 2);
+    ctx.fillStyle = '#AADDFF';
     ctx.fill();
   }
   ctx.restore();
 }
 
 function drawOceanFloor() {
-  const floorY = WORLD_H - 60 - camY;
-  if (floorY > CANVAS_H) return;
+  // Draw perspective ground plane (ocean floor) receding into the distance
+  // The floor is the bottom portion of the world (y > WORLD_H - 60)
 
-  // Sand
-  const sandGrad = ctx.createLinearGradient(0, floorY, 0, floorY + 60);
-  sandGrad.addColorStop(0, '#C4A56B');
-  sandGrad.addColorStop(1, '#A08050');
+  // Draw sand plane with perspective lines
+  ctx.save();
+
+  // Ground plane: trapezoid from near (wide at bottom) to far (narrow at horizon)
+  const nearLeft = -50;
+  const nearRight = CANVAS_W + 50;
+  const farLeft = VANISH_X - 60;
+  const farRight = VANISH_X + 60;
+  const nearY = GROUND_Y + 20;
+  const farY = VANISH_Y + (GROUND_Y - VANISH_Y) * 0.55; // floor starts a bit above horizon
+
+  // Sand gradient on the ground plane
+  const sandGrad = ctx.createLinearGradient(0, farY, 0, nearY);
+  sandGrad.addColorStop(0, '#6A5030');  // dark sand far away
+  sandGrad.addColorStop(0.3, '#8A6A40');
+  sandGrad.addColorStop(0.7, '#B08850');
+  sandGrad.addColorStop(1, '#C4A56B');  // light sand near
   ctx.fillStyle = sandGrad;
-  ctx.fillRect(0, Math.max(0, floorY), CANVAS_W, 60);
+  ctx.beginPath();
+  ctx.moveTo(farLeft, farY);
+  ctx.lineTo(farRight, farY);
+  ctx.lineTo(nearRight, nearY);
+  ctx.lineTo(nearLeft, nearY);
+  ctx.closePath();
+  ctx.fill();
 
-  // Coral
-  const startTile = Math.floor(camX / 200);
-  for (let t = startTile - 1; t <= startTile + 4; t++) {
-    const bx = t * 200 + 100 - camX;
-    const by = floorY;
-    if (bx < -100 || bx > CANVAS_W + 100) continue;
-    const hue = (t * 73) % 360;
-    ctx.fillStyle = `hsl(${hue}, 60%, 55%)`;
+  // Perspective grid lines on the floor for depth cue
+  ctx.strokeStyle = 'rgba(160,128,80,0.15)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 15; i++) {
+    const t = i / 15;
+    const lineY = farY + (nearY - farY) * t;
+    const lineLeft = farLeft + (nearLeft - farLeft) * t;
+    const lineRight = farRight + (nearRight - farRight) * t;
     ctx.beginPath();
-    ctx.ellipse(bx, by, 20 + (t % 3) * 8, 15 + (t % 4) * 5, 0, Math.PI, 0);
-    ctx.fill();
-    ctx.fillStyle = `hsl(${hue}, 60%, 65%)`;
-    ctx.beginPath();
-    ctx.ellipse(bx, by - 5, 12 + (t % 2) * 4, 10 + (t % 3) * 3, 0, Math.PI, 0);
-    ctx.fill();
+    ctx.moveTo(lineLeft, lineY);
+    ctx.lineTo(lineRight, lineY);
+    ctx.stroke();
   }
+
+  // Coral reef along the ocean floor in perspective
+  const floorWorldY = WORLD_H - 60;
+  const startTile = Math.floor((player.x - 400) / 150);
+  const endTile = Math.floor((player.x + 400) / 150) + 1;
+
+  // Collect and sort corals by depth
+  const corals = [];
+  for (let t = startTile; t <= endTile; t++) {
+    const coralWorldX = t * 150 + 75;
+    const coralWorldY = floorWorldY + (t % 3) * 5;
+    const proj = projectToScreen(coralWorldX, coralWorldY);
+    if (!proj) continue;
+    if (proj.sx < -80 || proj.sx > CANVAS_W + 80) continue;
+    corals.push({ t, proj });
+  }
+  // Draw far corals first
+  corals.sort((a, b) => a.proj.t - b.proj.t);
+
+  for (const { t, proj } of corals) {
+    const hue = (t * 73) % 360;
+    const sc = proj.scale;
+    const cx = proj.sx;
+    const cy = proj.sy;
+
+    // Main coral mound
+    ctx.fillStyle = `hsla(${hue}, 60%, ${35 + sc * 25}%, ${0.4 + sc * 0.6})`;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, (18 + (t % 3) * 8) * sc, (14 + (t % 4) * 5) * sc, 0, Math.PI, 0);
+    ctx.fill();
+
+    // Secondary coral branch
+    ctx.fillStyle = `hsla(${(hue + 40) % 360}, 55%, ${40 + sc * 25}%, ${0.3 + sc * 0.6})`;
+    ctx.beginPath();
+    ctx.ellipse(cx + 5 * sc, cy - 4 * sc, (10 + (t % 2) * 4) * sc, (9 + (t % 3) * 3) * sc, 0, Math.PI, 0);
+    ctx.fill();
+
+    // Small detail coral
+    if (sc > 0.4) {
+      ctx.fillStyle = `hsla(${(hue + 120) % 360}, 50%, 55%, ${0.3 + sc * 0.4})`;
+      ctx.beginPath();
+      ctx.ellipse(cx - 8 * sc, cy - 2 * sc, 6 * sc, 5 * sc, 0, Math.PI, 0);
+      ctx.fill();
+    }
+  }
+
+  ctx.restore();
 }
 
 function drawPiranha(x, y, size, facingRight, swimTimer, skin, biting, biteCharged, canHit) {
@@ -1011,18 +1125,122 @@ function drawMosasaurus(x, y, s, vx, swimTimer) {
   ctx.restore();
 }
 
-function drawEntityHealthBar(sx, sy, entity) {
+function drawEntityHealthBar(sx, sy, entity, perspScale) {
   if (entity.health >= entity.maxHealth) return;
   if (!['orca', 'whale', 'megalodon', 'mosasaurus'].includes(entity.type)) return;
-  const barW = 30 * entity.size * 0.3;
-  const barH = 3;
+  const sc = perspScale || 1;
+  const barW = 30 * entity.size * 0.3 * sc;
+  const barH = 3 * sc;
   const bx = sx - barW / 2;
-  const by = sy - 18 * entity.size * 0.4;
+  const by = sy - 18 * entity.size * 0.4 * sc;
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(bx, by, barW, barH);
   const pct = entity.health / entity.maxHealth;
   ctx.fillStyle = pct > 0.5 ? '#44CC44' : (pct > 0.25 ? '#CCAA22' : '#CC3333');
   ctx.fillRect(bx, by, barW * pct, barH);
+}
+
+// ============================================================
+// BEHIND-THE-FISH PLAYER DRAWING
+// ============================================================
+function drawPlayerFromBehind(screenX, screenY, size, swimTimer, biting, biteCharged, canHit) {
+  ctx.save();
+  ctx.translate(screenX, screenY);
+  const s = size;
+
+  // Tail (wagging left/right as seen from behind)
+  const tailWag = Math.sin(swimTimer * 8) * 0.3;
+  const tailSpread = Math.sin(swimTimer * 8 + 0.5) * 0.15;
+
+  // Shadow under the fish
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath();
+  ctx.ellipse(0, 14 * s, 16 * s, 4 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tail fin (behind the body, spread as V-shape from behind)
+  ctx.fillStyle = '#CC3300';
+  ctx.beginPath();
+  ctx.moveTo(0, -2 * s);
+  ctx.lineTo((-10 - tailSpread * 10) * s, (-18 + tailWag * 6) * s);
+  ctx.lineTo((-4) * s, (-8) * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(0, -2 * s);
+  ctx.lineTo((10 + tailSpread * 10) * s, (-18 + tailWag * 6) * s);
+  ctx.lineTo((4) * s, (-8) * s);
+  ctx.closePath();
+  ctx.fill();
+
+  // Body from behind (rounder oval seen from back)
+  ctx.fillStyle = '#FF4400';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 14 * s, 12 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Belly highlight (lighter underside visible from behind)
+  ctx.fillStyle = '#FF8844';
+  ctx.beginPath();
+  ctx.ellipse(0, 5 * s, 10 * s, 6 * s, 0, 0, Math.PI);
+  ctx.fill();
+
+  // Dorsal fin on top
+  ctx.fillStyle = '#CC2200';
+  ctx.beginPath();
+  ctx.moveTo(-2 * s, -12 * s);
+  ctx.lineTo(0, -20 * s);
+  ctx.lineTo(2 * s, -12 * s);
+  ctx.closePath();
+  ctx.fill();
+
+  // Side fins (pectoral fins sticking out left/right)
+  const finFlap = Math.sin(swimTimer * 6) * 0.2;
+  ctx.fillStyle = '#DD3300';
+  // Left fin
+  ctx.beginPath();
+  ctx.moveTo(-12 * s, 0);
+  ctx.lineTo((-20 - finFlap * 5) * s, (4 + finFlap * 3) * s);
+  ctx.lineTo(-12 * s, 6 * s);
+  ctx.closePath();
+  ctx.fill();
+  // Right fin
+  ctx.beginPath();
+  ctx.moveTo(12 * s, 0);
+  ctx.lineTo((20 + finFlap * 5) * s, (4 + finFlap * 3) * s);
+  ctx.lineTo(12 * s, 6 * s);
+  ctx.closePath();
+  ctx.fill();
+
+  // Back texture / scale hints
+  ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+  ctx.lineWidth = 0.5 * s;
+  for (let i = -2; i <= 2; i++) {
+    ctx.beginPath();
+    ctx.arc(0, -2 * s, (5 + Math.abs(i) * 3) * s, Math.PI * 0.3, Math.PI * 0.7);
+    ctx.stroke();
+  }
+
+  // Bite indicator (glowing aura when biting)
+  if (biting) {
+    const glowColor = canHit ? 'rgba(255,215,0,' : 'rgba(255,255,255,';
+    const pulse = 0.2 + Math.sin(swimTimer * 10) * 0.1;
+    ctx.beginPath();
+    ctx.arc(0, 8 * s, 20 * s, 0, Math.PI * 2);
+    ctx.strokeStyle = glowColor + (biteCharged ? pulse + 0.3 : pulse) + ')';
+    ctx.lineWidth = biteCharged ? 3 : 2;
+    ctx.stroke();
+
+    if (biteCharged) {
+      ctx.beginPath();
+      ctx.arc(0, 8 * s, 24 * s, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,215,0,${pulse})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
 }
 
 function updateEntities() {
@@ -1737,35 +1955,61 @@ function gameLoop(timestamp) {
   drawOceanBackground();
   drawOceanFloor();
 
-  // Draw entities (camera culled)
+  // Collect all drawable things with their projected positions for depth sorting
+  const drawList = [];
+
+  // Project entities
   for (const e of entities) {
-    const sx = e.x - camX;
-    const sy = e.y - camY;
-    if (sx < -60 || sx > CANVAS_W + 60 || sy < -60 || sy > CANVAS_H + 60) continue;
-    if (e.type === 'clam') drawClam(sx, sy, e.size);
-    else if (e.type === 'seashell') drawSeashell(sx, sy, e.size);
-    else if (e.type === 'clownfish') drawClownfish(sx, sy, e.size, e.vx, e.swimTimer || 0);
-    else if (e.type === 'meat') drawMeat(sx, sy, e.size);
-    else if (e.type === 'medfish') drawMediumFish(sx, sy, e.size, e.vx, e.swimTimer || 0, e.color);
-    else if (e.type === 'orca') drawOrca(sx, sy, e.size, e.vx, e.swimTimer || 0);
-    else if (e.type === 'whale') drawWhale(sx, sy, e.size, e.vx, e.swimTimer || 0);
-    else if (e.type === 'megalodon') drawMegalodon(sx, sy, e.size, e.vx, e.swimTimer || 0);
-    else if (e.type === 'mosasaurus') drawMosasaurus(sx, sy, e.size, e.vx, e.swimTimer || 0);
-    drawEntityHealthBar(sx, sy, e);
+    const proj = projectToScreen(e.x, e.y);
+    if (!proj) continue;
+    if (proj.sx < -80 || proj.sx > CANVAS_W + 80 || proj.sy < -80 || proj.sy > CANVAS_H + 80) continue;
+    drawList.push({ kind: 'entity', e, proj });
   }
 
-  // Draw family
+  // Project family
   for (const f of family) {
-    const fx = f.x - camX;
-    const fy = f.y - camY;
-    if (fx < -60 || fx > CANVAS_W + 60 || fy < -60 || fy > CANVAS_H + 60) continue;
-    const facingRight = f.x < player.x ? true : (f.x > player.x ? false : player.facingRight);
-    drawPiranha(fx, fy, f.size, facingRight, f.swimTimer, 'normal', false, false, false);
+    const proj = projectToScreen(f.x, f.y);
+    if (!proj) continue;
+    if (proj.sx < -80 || proj.sx > CANVAS_W + 80 || proj.sy < -80 || proj.sy > CANVAS_H + 80) continue;
+    drawList.push({ kind: 'family', f, proj });
+  }
+
+  // Add player (always drawn, at fixed-ish position)
+  const playerProj = projectToScreen(player.x, player.y);
+  if (playerProj) {
+    drawList.push({ kind: 'player', proj: playerProj });
+  }
+
+  // Sort by depth: far (high t) drawn first, near (low t) drawn last (on top)
+  drawList.sort((a, b) => b.proj.t - a.proj.t);
+
+  // Draw everything in depth order
+  for (const item of drawList) {
+    const { sx, sy, scale } = item.proj;
+    if (item.kind === 'entity') {
+      const e = item.e;
+      const s = e.size * scale;
+      if (e.type === 'clam') drawClam(sx, sy, s);
+      else if (e.type === 'seashell') drawSeashell(sx, sy, s);
+      else if (e.type === 'clownfish') drawClownfish(sx, sy, s, e.vx, e.swimTimer || 0);
+      else if (e.type === 'meat') drawMeat(sx, sy, s);
+      else if (e.type === 'medfish') drawMediumFish(sx, sy, s, e.vx, e.swimTimer || 0, e.color);
+      else if (e.type === 'orca') drawOrca(sx, sy, s, e.vx, e.swimTimer || 0);
+      else if (e.type === 'whale') drawWhale(sx, sy, s, e.vx, e.swimTimer || 0);
+      else if (e.type === 'megalodon') drawMegalodon(sx, sy, s, e.vx, e.swimTimer || 0);
+      else if (e.type === 'mosasaurus') drawMosasaurus(sx, sy, s, e.vx, e.swimTimer || 0);
+      drawEntityHealthBar(sx, sy, e, scale);
+    } else if (item.kind === 'family') {
+      const f = item.f;
+      const s = f.size * scale;
+      const facingRight = f.x < player.x ? true : (f.x > player.x ? false : player.facingRight);
+      drawPiranha(sx, sy, s, facingRight, f.swimTimer, 'normal', false, false, false);
+    } else if (item.kind === 'player') {
+      drawPlayerFromBehind(sx, sy, player.size * scale, player.swimTimer, player.biting, player.biteCharged, player.canHitSomething);
+    }
   }
 
   drawBubbles();
-
-  drawPiranha(player.x - camX, player.y - camY, player.size, player.facingRight, player.swimTimer, 'normal', player.biting, player.biteCharged, player.canHitSomething);
 
   if (gameState === STATE_SHOP) {
     drawShop();
