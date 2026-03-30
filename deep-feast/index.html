@@ -14,24 +14,53 @@
     min-height: 100vh;
     overflow: hidden;
   }
-  canvas {
-    border-radius: 4px;
-    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+  #game-container {
+    position: relative;
     height: 90vh;
     width: 90vh;
-    image-rendering: pixelated;
+    border-radius: 4px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    overflow: hidden;
+  }
+  #game-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
     -webkit-user-select: none;
   }
+  #hud-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 20;
+    pointer-events: none;
+  }
+  #overlay.active {
+    pointer-events: auto;
+  }
   @media (max-width: 768px), (max-height: 500px) {
-    canvas { width: 100vw; height: 100vw; max-height: 100vh; border-radius: 0; box-shadow: none; }
+    #game-container { width: 100vw; height: 100vw; max-height: 100vh; border-radius: 0; box-shadow: none; }
   }
 </style>
 </head>
 <body>
-<canvas id="game" width="600" height="600"></canvas>
+<div id="game-container">
+  <canvas id="hud-canvas" width="600" height="600"></canvas>
+  <div id="overlay"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ============================================================
 // CONSTANTS
@@ -42,58 +71,805 @@ const WORLD_W = 6000;
 const WORLD_H = 800;
 const FIXED_DT = 1 / 60;
 const PLAYER_SPEED = 3;
-const SPRINT_SPEED = 5.4; // 1.8x normal
-const SPRINT_MAX = 13; // seconds
+const SPRINT_SPEED = 5.4;
+const SPRINT_MAX = 13;
 const BITE_CHARGE_TIME = 2.0;
 const BITE_DAMAGE_MULT = 1.5;
 const BITE_RANGE = 30;
 
 // ============================================================
-// CANVAS SETUP
+// THREE.JS SETUP
 // ============================================================
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
+const container = document.getElementById('game-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a2848);
+scene.fog = new THREE.FogExp2(0x061830, 0.0004);
+
+const camera = new THREE.PerspectiveCamera(60, 1, 1, 8000);
+camera.position.set(300, 120, 500);
+camera.lookAt(300, 80, 300);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(600, 600);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = false;
+container.insertBefore(renderer.domElement, container.firstChild);
+
+// Lights
+const ambientLight = new THREE.AmbientLight(0x4488cc, 0.6);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xaaddff, 0.8);
+dirLight.position.set(200, 600, 300);
+scene.add(dirLight);
+
+const pointLight = new THREE.PointLight(0x88ccff, 0.3, 2000);
+pointLight.position.set(3000, 600, 400);
+scene.add(pointLight);
 
 // ============================================================
-// CAMERA
+// HUD CANVAS (2D overlay)
 // ============================================================
-let camX = 0;
-let camY = 0;
+const hudCanvas = document.getElementById('hud-canvas');
+const ctx = hudCanvas.getContext('2d');
 
-function updateCamera(targetX, targetY) {
-  camX = Math.max(0, Math.min(WORLD_W - CANVAS_W, targetX - CANVAS_W / 2));
-  camY = Math.max(0, Math.min(WORLD_H - CANVAS_H, targetY - CANVAS_H / 2));
+// ============================================================
+// 3D ENVIRONMENT
+// ============================================================
+
+// Ocean floor
+const floorGeom = new THREE.PlaneGeometry(WORLD_W + 400, 1200);
+const floorMat = new THREE.MeshLambertMaterial({ color: 0xb08850 });
+const floor = new THREE.Mesh(floorGeom, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.set(WORLD_W / 2, 0, 0);
+scene.add(floor);
+
+// Sand detail - darker patches
+for (let i = 0; i < 40; i++) {
+  const patchGeom = new THREE.PlaneGeometry(60 + Math.random() * 100, 30 + Math.random() * 60);
+  const patchMat = new THREE.MeshLambertMaterial({ color: 0x8a6a40, transparent: true, opacity: 0.4 });
+  const patch = new THREE.Mesh(patchGeom, patchMat);
+  patch.rotation.x = -Math.PI / 2;
+  patch.position.set(Math.random() * WORLD_W, 0.1, -300 + Math.random() * 600);
+  scene.add(patch);
+}
+
+// Coral reef decorations
+const coralColors = [0xff6688, 0xff9944, 0xffcc33, 0x44dd88, 0x8844ff, 0xff44aa, 0x44aaff, 0xee5533];
+const coralGroup = new THREE.Group();
+for (let x = 50; x < WORLD_W; x += 120 + Math.random() * 80) {
+  const color = coralColors[Math.floor(Math.random() * coralColors.length)];
+  const type = Math.floor(Math.random() * 3);
+  const cGroup = new THREE.Group();
+
+  if (type === 0) {
+    // Sphere coral
+    const g = new THREE.SphereGeometry(8 + Math.random() * 12, 8, 6);
+    const m = new THREE.MeshLambertMaterial({ color });
+    const mesh = new THREE.Mesh(g, m);
+    mesh.scale.y = 0.6 + Math.random() * 0.4;
+    cGroup.add(mesh);
+  } else if (type === 1) {
+    // Cylinder coral (tall)
+    for (let j = 0; j < 2 + Math.floor(Math.random() * 3); j++) {
+      const g = new THREE.CylinderGeometry(2, 3, 10 + Math.random() * 20, 6);
+      const m = new THREE.MeshLambertMaterial({ color });
+      const mesh = new THREE.Mesh(g, m);
+      mesh.position.set((Math.random() - 0.5) * 10, (5 + Math.random() * 10), (Math.random() - 0.5) * 10);
+      cGroup.add(mesh);
+    }
+  } else {
+    // Fan coral (flat cone)
+    const g = new THREE.ConeGeometry(10 + Math.random() * 8, 15 + Math.random() * 15, 6);
+    const m = new THREE.MeshLambertMaterial({ color });
+    const mesh = new THREE.Mesh(g, m);
+    mesh.position.y = 8;
+    cGroup.add(mesh);
+  }
+
+  cGroup.position.set(x, 0, -200 + Math.random() * 400);
+  coralGroup.add(cGroup);
+}
+scene.add(coralGroup);
+
+// Water surface (semi-transparent plane at top)
+const waterGeom = new THREE.PlaneGeometry(WORLD_W + 400, 1200);
+const waterMat = new THREE.MeshLambertMaterial({
+  color: 0x2090d0,
+  transparent: true,
+  opacity: 0.15,
+  side: THREE.DoubleSide
+});
+const waterSurface = new THREE.Mesh(waterGeom, waterMat);
+waterSurface.rotation.x = -Math.PI / 2;
+waterSurface.position.set(WORLD_W / 2, 800, 0);
+scene.add(waterSurface);
+
+// Light rays (vertical translucent planes)
+const rayGroup = new THREE.Group();
+for (let i = 0; i < 12; i++) {
+  const rayGeom = new THREE.PlaneGeometry(20, 800);
+  const rayMat = new THREE.MeshBasicMaterial({
+    color: 0x88ccff,
+    transparent: true,
+    opacity: 0.03,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const ray = new THREE.Mesh(rayGeom, rayMat);
+  ray.position.set(500 + i * 450, 400, -100 + Math.random() * 200);
+  ray.rotation.z = (Math.random() - 0.5) * 0.2;
+  rayGroup.add(ray);
+}
+scene.add(rayGroup);
+
+// ============================================================
+// BUBBLE PARTICLES (3D)
+// ============================================================
+let bubbles3D = [];
+const bubbleGeom = new THREE.SphereGeometry(1, 6, 6);
+const bubbleMat = new THREE.MeshBasicMaterial({
+  color: 0xffffff,
+  transparent: true,
+  opacity: 0.2,
+  depthWrite: false
+});
+
+function initBubbles3D() {
+  for (const b of bubbles3D) scene.remove(b.mesh);
+  bubbles3D = [];
+  for (let i = 0; i < 60; i++) {
+    const mesh = new THREE.Mesh(bubbleGeom, bubbleMat.clone());
+    const r = 1 + Math.random() * 3;
+    mesh.scale.set(r, r, r);
+    const bx = Math.random() * WORLD_W;
+    const by = Math.random() * WORLD_H;
+    const bz = -300 + Math.random() * 600;
+    mesh.position.set(bx, by, bz);
+    scene.add(mesh);
+    bubbles3D.push({
+      mesh,
+      speed: 0.3 + Math.random() * 0.8,
+      wobble: Math.random() * Math.PI * 2,
+      baseX: bx,
+      z: bz
+    });
+  }
+}
+
+function updateBubbles3D() {
+  for (const b of bubbles3D) {
+    b.mesh.position.y += b.speed;
+    b.wobble += 0.03;
+    b.mesh.position.x = b.baseX + Math.sin(b.wobble) * 3;
+    if (b.mesh.position.y > WORLD_H + 10) {
+      b.mesh.position.y = -10;
+      b.baseX = Math.random() * WORLD_W;
+      b.mesh.position.x = b.baseX;
+      b.mesh.position.z = -300 + Math.random() * 600;
+    }
+  }
 }
 
 // ============================================================
-// PERSPECTIVE PROJECTION (behind-the-fish 3D view)
+// 3D MESH FACTORIES
 // ============================================================
-const VIEW_DIST = 500;      // how far ahead you can see in world units
-const BEHIND_DIST = 80;     // how far behind the player is still visible
-const VANISH_X = CANVAS_W / 2; // vanishing point X
-const VANISH_Y = CANVAS_H * 0.18; // vanishing point Y (horizon line)
-const GROUND_Y = CANVAS_H * 0.92; // where the ground plane meets the screen bottom
 
-function projectToScreen(worldX, worldY) {
-  // depth = how far ahead of the player (positive = ahead, negative = behind)
-  const depth = player.y - worldY;
+function createPiranhaMesh(skin) {
+  const group = new THREE.Group();
+  const isSkeleton = skin === 'skeleton';
 
-  if (depth < -BEHIND_DIST || depth > VIEW_DIST) return null;
+  // Body
+  const bodyGeom = new THREE.SphereGeometry(1, 12, 8);
+  const bodyMat = new THREE.MeshLambertMaterial({ color: isSkeleton ? 0xe8e0d0 : 0xff4400 });
+  const body = new THREE.Mesh(bodyGeom, bodyMat);
+  body.scale.set(20, 12, 10);
+  group.add(body);
 
-  // t: 0 = at/behind player, 1 = far away at horizon
-  const t = Math.max(0, (depth + BEHIND_DIST) / (VIEW_DIST + BEHIND_DIST));
+  // Belly
+  const bellyGeom = new THREE.SphereGeometry(1, 10, 6);
+  const bellyMat = new THREE.MeshLambertMaterial({ color: isSkeleton ? 0xf0e8d8 : 0xff8844 });
+  const belly = new THREE.Mesh(bellyGeom, bellyMat);
+  belly.scale.set(14, 6, 8);
+  belly.position.set(2, -4, 0);
+  group.add(belly);
 
-  // Perspective scale: near = large, far = small
-  // Use a non-linear curve for more dramatic perspective
-  const perspective = 1.0 - t * 0.85;
+  // Tail
+  const tailGeom = new THREE.ConeGeometry(10, 16, 4);
+  const tailMat = new THREE.MeshLambertMaterial({ color: isSkeleton ? 0xd0c8b8 : 0xcc3300 });
+  const tail = new THREE.Mesh(tailGeom, tailMat);
+  tail.rotation.z = Math.PI / 2;
+  tail.position.set(-26, 0, 0);
+  tail.name = 'tail';
+  group.add(tail);
 
-  // Screen X: offset from center based on world X difference, scaled by perspective
-  const sx = VANISH_X + (worldX - player.x) * perspective * 0.9;
+  // Dorsal fin
+  const dorsalGeom = new THREE.ConeGeometry(6, 10, 4);
+  const dorsalMat = new THREE.MeshLambertMaterial({ color: isSkeleton ? 0xc8c0b0 : 0xcc2200 });
+  const dorsal = new THREE.Mesh(dorsalGeom, dorsalMat);
+  dorsal.position.set(2, 14, 0);
+  group.add(dorsal);
 
-  // Screen Y: interpolate between ground (near) and vanishing point (far)
-  const sy = GROUND_Y + (VANISH_Y - GROUND_Y) * t;
+  // Eye (right)
+  const eyeWhiteGeom = new THREE.SphereGeometry(3.5, 8, 8);
+  const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const eyeR = new THREE.Mesh(eyeWhiteGeom, eyeWhiteMat);
+  eyeR.position.set(10, 3, 8);
+  group.add(eyeR);
+  const pupilGeom = new THREE.SphereGeometry(1.8, 8, 8);
+  const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+  const pupilR = new THREE.Mesh(pupilGeom, pupilMat);
+  pupilR.position.set(11, 3, 10);
+  group.add(pupilR);
 
-  return { sx, sy, scale: perspective, t };
+  // Eye (left)
+  const eyeL = new THREE.Mesh(eyeWhiteGeom, eyeWhiteMat);
+  eyeL.position.set(10, 3, -8);
+  group.add(eyeL);
+  const pupilL = new THREE.Mesh(pupilGeom, pupilMat);
+  pupilL.position.set(11, 3, -10);
+  group.add(pupilL);
+
+  // Skeleton ribs
+  if (isSkeleton) {
+    const ribMat = new THREE.MeshBasicMaterial({ color: 0xb0a898 });
+    for (let i = -2; i <= 2; i++) {
+      const ribGeom = new THREE.CylinderGeometry(0.3, 0.3, 20, 4);
+      const rib = new THREE.Mesh(ribGeom, ribMat);
+      rib.position.set(i * 5, 0, 0);
+      rib.rotation.x = Math.PI / 2;
+      group.add(rib);
+    }
+  }
+
+  // Bite indicator group (hidden by default)
+  const biteGroup = new THREE.Group();
+  biteGroup.visible = false;
+  biteGroup.name = 'biteGroup';
+
+  // Bite ring
+  const ringGeom = new THREE.TorusGeometry(BITE_RANGE, 1.5, 8, 16, Math.PI * 1.2);
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false });
+  const ring = new THREE.Mesh(ringGeom, ringMat);
+  ring.rotation.y = Math.PI / 2;
+  ring.rotation.x = -Math.PI * 0.6;
+  ring.position.set(20, 0, 0);
+  ring.name = 'biteRing';
+  biteGroup.add(ring);
+
+  // Teeth on the ring
+  const toothGeom = new THREE.ConeGeometry(2, 8, 4);
+  const toothMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  for (let t = 0; t < 5; t++) {
+    const angle = -0.6 + t * 0.3;
+    const tooth = new THREE.Mesh(toothGeom, toothMat.clone());
+    tooth.position.set(
+      20 + Math.cos(angle) * BITE_RANGE,
+      Math.sin(angle) * BITE_RANGE,
+      0
+    );
+    tooth.rotation.z = angle - Math.PI / 2;
+    tooth.name = 'tooth';
+    biteGroup.add(tooth);
+  }
+
+  group.add(biteGroup);
+
+  return group;
+}
+
+function createClownfishMesh() {
+  const group = new THREE.Group();
+
+  // Body
+  const bodyGeom = new THREE.SphereGeometry(1, 10, 8);
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0xff6600 });
+  const body = new THREE.Mesh(bodyGeom, bodyMat);
+  body.scale.set(12, 7, 6);
+  group.add(body);
+
+  // White stripes
+  const stripeMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const stripe1Geom = new THREE.BoxGeometry(2, 16, 14);
+  const s1 = new THREE.Mesh(stripe1Geom, stripeMat);
+  s1.position.set(-1, 0, 0);
+  group.add(s1);
+  const stripe2Geom = new THREE.BoxGeometry(1.5, 14, 12);
+  const s2 = new THREE.Mesh(stripe2Geom, stripeMat);
+  s2.position.set(5, 0, 0);
+  group.add(s2);
+
+  // Tail
+  const tailGeom = new THREE.ConeGeometry(5, 10, 4);
+  const tailMat = new THREE.MeshLambertMaterial({ color: 0xff8c00 });
+  const tail = new THREE.Mesh(tailGeom, tailMat);
+  tail.rotation.z = Math.PI / 2;
+  tail.position.set(-15, 0, 0);
+  tail.name = 'tail';
+  group.add(tail);
+
+  // Eyes
+  const eyeGeom = new THREE.SphereGeometry(2, 6, 6);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const eyeR = new THREE.Mesh(eyeGeom, eyeMat);
+  eyeR.position.set(7, 2, 5);
+  group.add(eyeR);
+  const pupilGeom = new THREE.SphereGeometry(1, 6, 6);
+  const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const pupilR = new THREE.Mesh(pupilGeom, pupilMat);
+  pupilR.position.set(7.5, 2, 6);
+  group.add(pupilR);
+  const eyeL = eyeR.clone();
+  eyeL.position.set(7, 2, -5);
+  group.add(eyeL);
+  const pupilL = pupilR.clone();
+  pupilL.position.set(7.5, 2, -6);
+  group.add(pupilL);
+
+  return group;
+}
+
+function createMediumFishMesh(color) {
+  const group = new THREE.Group();
+  const col = new THREE.Color(color);
+
+  const bodyGeom = new THREE.SphereGeometry(1, 10, 8);
+  const bodyMat = new THREE.MeshLambertMaterial({ color: col });
+  const body = new THREE.Mesh(bodyGeom, bodyMat);
+  body.scale.set(16, 9, 8);
+  group.add(body);
+
+  const tailGeom = new THREE.ConeGeometry(7, 14, 4);
+  const tailMat = new THREE.MeshLambertMaterial({ color: col });
+  const tail = new THREE.Mesh(tailGeom, tailMat);
+  tail.rotation.z = Math.PI / 2;
+  tail.position.set(-20, 0, 0);
+  tail.name = 'tail';
+  group.add(tail);
+
+  const eyeGeom = new THREE.SphereGeometry(2.5, 6, 6);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const eyeR = new THREE.Mesh(eyeGeom, eyeMat);
+  eyeR.position.set(8, 2, 6);
+  group.add(eyeR);
+  const pupilGeom = new THREE.SphereGeometry(1.2, 6, 6);
+  const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const pupilR = new THREE.Mesh(pupilGeom, pupilMat);
+  pupilR.position.set(8.5, 2, 7.5);
+  group.add(pupilR);
+  const eyeL = eyeR.clone();
+  eyeL.position.set(8, 2, -6);
+  group.add(eyeL);
+  const pupilL = pupilR.clone();
+  pupilL.position.set(8.5, 2, -7.5);
+  group.add(pupilL);
+
+  return group;
+}
+
+function createOrcaMesh() {
+  const group = new THREE.Group();
+  const sc = 0.5;
+
+  // Body
+  const bodyGeom = new THREE.SphereGeometry(1, 12, 8);
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  const body = new THREE.Mesh(bodyGeom, bodyMat);
+  body.scale.set(24 * sc, 12 * sc, 10 * sc);
+  group.add(body);
+
+  // White belly
+  const bellyGeom = new THREE.SphereGeometry(1, 10, 6);
+  const bellyMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const belly = new THREE.Mesh(bellyGeom, bellyMat);
+  belly.scale.set(18 * sc, 6 * sc, 8 * sc);
+  belly.position.set(2 * sc, -4 * sc, 0);
+  group.add(belly);
+
+  // White eye patch
+  const patchGeom = new THREE.SphereGeometry(1, 8, 6);
+  const patchMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const patchR = new THREE.Mesh(patchGeom, patchMat);
+  patchR.scale.set(5 * sc, 3 * sc, 2 * sc);
+  patchR.position.set(10 * sc, 4 * sc, 8 * sc);
+  group.add(patchR);
+  const patchL = patchR.clone();
+  patchL.position.set(10 * sc, 4 * sc, -8 * sc);
+  group.add(patchL);
+
+  // Tail
+  const tailGeom = new THREE.ConeGeometry(10 * sc, 18 * sc, 4);
+  const tailMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  const tail = new THREE.Mesh(tailGeom, tailMat);
+  tail.rotation.z = Math.PI / 2;
+  tail.position.set(-28 * sc, 0, 0);
+  tail.name = 'tail';
+  group.add(tail);
+
+  // Dorsal fin (tall)
+  const dorsalGeom = new THREE.ConeGeometry(4 * sc, 18 * sc, 4);
+  const dorsalMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  const dorsal = new THREE.Mesh(dorsalGeom, dorsalMat);
+  dorsal.position.set(0, 16 * sc, 0);
+  group.add(dorsal);
+
+  // Eye
+  const eyeGeom = new THREE.SphereGeometry(1.5 * sc, 6, 6);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+  const eyeR = new THREE.Mesh(eyeGeom, eyeMat);
+  eyeR.position.set(11 * sc, 4 * sc, 9 * sc);
+  group.add(eyeR);
+  const eyeL = eyeR.clone();
+  eyeL.position.set(11 * sc, 4 * sc, -9 * sc);
+  group.add(eyeL);
+
+  return group;
+}
+
+function createWhaleMesh() {
+  const group = new THREE.Group();
+  const sc = 0.4;
+
+  // Body
+  const bodyGeom = new THREE.SphereGeometry(1, 12, 8);
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x4a6a8a });
+  const body = new THREE.Mesh(bodyGeom, bodyMat);
+  body.scale.set(35 * sc, 16 * sc, 14 * sc);
+  group.add(body);
+
+  // Lighter belly
+  const bellyGeom = new THREE.SphereGeometry(1, 10, 6);
+  const bellyMat = new THREE.MeshLambertMaterial({ color: 0x8aaaba });
+  const belly = new THREE.Mesh(bellyGeom, bellyMat);
+  belly.scale.set(25 * sc, 8 * sc, 12 * sc);
+  belly.position.set(5 * sc, -6 * sc, 0);
+  group.add(belly);
+
+  // Tail
+  const tailGeom = new THREE.ConeGeometry(12 * sc, 20 * sc, 4);
+  const tailMat = new THREE.MeshLambertMaterial({ color: 0x3a5a7a });
+  const tail = new THREE.Mesh(tailGeom, tailMat);
+  tail.rotation.z = Math.PI / 2;
+  tail.position.set(-40 * sc, 0, 0);
+  tail.name = 'tail';
+  group.add(tail);
+
+  // Mouth line (small cylinder)
+  const mouthGeom = new THREE.CylinderGeometry(0.5 * sc, 0.5 * sc, 6 * sc, 4);
+  const mouthMat = new THREE.MeshBasicMaterial({ color: 0x2a4a6a });
+  const mouth = new THREE.Mesh(mouthGeom, mouthMat);
+  mouth.rotation.x = Math.PI / 2;
+  mouth.position.set(28 * sc, -2 * sc, 0);
+  group.add(mouth);
+
+  // Eyes
+  const eyeGeom = new THREE.SphereGeometry(2 * sc, 6, 6);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+  const eyeR = new THREE.Mesh(eyeGeom, eyeMat);
+  eyeR.position.set(20 * sc, 4 * sc, 12 * sc);
+  group.add(eyeR);
+  const eyeL = eyeR.clone();
+  eyeL.position.set(20 * sc, 4 * sc, -12 * sc);
+  group.add(eyeL);
+
+  return group;
+}
+
+function createMegalodonMesh() {
+  const group = new THREE.Group();
+  const sc = 0.35;
+
+  // Body
+  const bodyGeom = new THREE.SphereGeometry(1, 12, 8);
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x5a6a7a });
+  const body = new THREE.Mesh(bodyGeom, bodyMat);
+  body.scale.set(30 * sc, 14 * sc, 12 * sc);
+  group.add(body);
+
+  // Lighter belly
+  const bellyGeom = new THREE.SphereGeometry(1, 10, 6);
+  const bellyMat = new THREE.MeshLambertMaterial({ color: 0x8a9aaa });
+  const belly = new THREE.Mesh(bellyGeom, bellyMat);
+  belly.scale.set(22 * sc, 7 * sc, 10 * sc);
+  belly.position.set(4 * sc, -5 * sc, 0);
+  group.add(belly);
+
+  // Tail
+  const tailGeom = new THREE.ConeGeometry(14 * sc, 22 * sc, 4);
+  const tailMat = new THREE.MeshLambertMaterial({ color: 0x4a5a6a });
+  const tail = new THREE.Mesh(tailGeom, tailMat);
+  tail.rotation.z = Math.PI / 2;
+  tail.position.set(-36 * sc, 0, 0);
+  tail.name = 'tail';
+  group.add(tail);
+
+  // Dorsal fin (very tall)
+  const dorsalGeom = new THREE.ConeGeometry(5 * sc, 22 * sc, 4);
+  const dorsalMat = new THREE.MeshLambertMaterial({ color: 0x4a5a6a });
+  const dorsal = new THREE.Mesh(dorsalGeom, dorsalMat);
+  dorsal.position.set(0, 18 * sc, 0);
+  group.add(dorsal);
+
+  // Jaw/snout
+  const jawGeom = new THREE.ConeGeometry(5 * sc, 12 * sc, 6);
+  const jawMat = new THREE.MeshLambertMaterial({ color: 0x3a4a5a });
+  const jaw = new THREE.Mesh(jawGeom, jawMat);
+  jaw.rotation.z = -Math.PI / 2;
+  jaw.position.set(28 * sc, -2 * sc, 0);
+  group.add(jaw);
+
+  // Teeth
+  const toothGeom = new THREE.ConeGeometry(0.8 * sc, 3 * sc, 4);
+  const toothMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  for (let t = 0; t < 5; t++) {
+    const tooth = new THREE.Mesh(toothGeom, toothMat);
+    tooth.position.set(24 * sc + t * 1.5 * sc, -5 * sc, 3 * sc);
+    group.add(tooth);
+    const tooth2 = tooth.clone();
+    tooth2.position.set(24 * sc + t * 1.5 * sc, -5 * sc, -3 * sc);
+    group.add(tooth2);
+  }
+
+  // Red eye
+  const eyeGeom = new THREE.SphereGeometry(2.5 * sc, 6, 6);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xcc0000 });
+  const eyeR = new THREE.Mesh(eyeGeom, eyeMat);
+  eyeR.position.set(16 * sc, 3 * sc, 10 * sc);
+  group.add(eyeR);
+  const pupilGeom = new THREE.SphereGeometry(1.2 * sc, 6, 6);
+  const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const pupilR = new THREE.Mesh(pupilGeom, pupilMat);
+  pupilR.position.set(16.5 * sc, 3 * sc, 11 * sc);
+  group.add(pupilR);
+  const eyeL = eyeR.clone();
+  eyeL.position.set(16 * sc, 3 * sc, -10 * sc);
+  group.add(eyeL);
+  const pupilL = pupilR.clone();
+  pupilL.position.set(16.5 * sc, 3 * sc, -11 * sc);
+  group.add(pupilL);
+
+  return group;
+}
+
+function createMosasaurusMesh() {
+  const group = new THREE.Group();
+  const sc = 0.3;
+
+  // Body
+  const bodyGeom = new THREE.SphereGeometry(1, 12, 8);
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x3a6a3a });
+  const body = new THREE.Mesh(bodyGeom, bodyMat);
+  body.scale.set(32 * sc, 12 * sc, 10 * sc);
+  group.add(body);
+
+  // Lighter belly
+  const bellyGeom = new THREE.SphereGeometry(1, 10, 6);
+  const bellyMat = new THREE.MeshLambertMaterial({ color: 0x6a9a6a });
+  const belly = new THREE.Mesh(bellyGeom, bellyMat);
+  belly.scale.set(24 * sc, 6 * sc, 8 * sc);
+  belly.position.set(5 * sc, -5 * sc, 0);
+  group.add(belly);
+
+  // Tail (sinuous)
+  const tailGeom = new THREE.ConeGeometry(8 * sc, 30 * sc, 4);
+  const tailMat = new THREE.MeshLambertMaterial({ color: 0x2a4a2a });
+  const tail = new THREE.Mesh(tailGeom, tailMat);
+  tail.rotation.z = Math.PI / 2;
+  tail.position.set(-40 * sc, 0, 0);
+  tail.name = 'tail';
+  group.add(tail);
+
+  // Head (distinct from body)
+  const headGeom = new THREE.SphereGeometry(1, 10, 8);
+  const headMat = new THREE.MeshLambertMaterial({ color: 0x3a6a3a });
+  const head = new THREE.Mesh(headGeom, headMat);
+  head.scale.set(12 * sc, 7 * sc, 8 * sc);
+  head.position.set(26 * sc, -1 * sc, 0);
+  group.add(head);
+
+  // Flippers
+  const flipperGeom = new THREE.SphereGeometry(1, 6, 4);
+  const flipperMat = new THREE.MeshLambertMaterial({ color: 0x2a5a2a });
+  const flipperR = new THREE.Mesh(flipperGeom, flipperMat);
+  flipperR.scale.set(10 * sc, 3 * sc, 4 * sc);
+  flipperR.position.set(-8 * sc, -8 * sc, 8 * sc);
+  flipperR.rotation.z = 0.4;
+  group.add(flipperR);
+  const flipperL = flipperR.clone();
+  flipperL.position.set(-8 * sc, -8 * sc, -8 * sc);
+  flipperL.rotation.z = -0.4;
+  group.add(flipperL);
+
+  const flipperR2 = flipperR.clone();
+  flipperR2.position.set(8 * sc, -8 * sc, 8 * sc);
+  group.add(flipperR2);
+  const flipperL2 = flipperL.clone();
+  flipperL2.position.set(8 * sc, -8 * sc, -8 * sc);
+  group.add(flipperL2);
+
+  // Jaw
+  const jawGeom = new THREE.ConeGeometry(4 * sc, 10 * sc, 6);
+  const jawMat = new THREE.MeshLambertMaterial({ color: 0x2a4a2a });
+  const jaw = new THREE.Mesh(jawGeom, jawMat);
+  jaw.rotation.z = -Math.PI / 2;
+  jaw.position.set(35 * sc, -2 * sc, 0);
+  group.add(jaw);
+
+  // Teeth
+  const toothGeom = new THREE.ConeGeometry(0.6 * sc, 2.5 * sc, 4);
+  const toothMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  for (let t = 0; t < 6; t++) {
+    const tooth = new THREE.Mesh(toothGeom, toothMat);
+    tooth.position.set(31 * sc + t * 1.5 * sc, -5 * sc, 2.5 * sc);
+    group.add(tooth);
+    const tooth2 = tooth.clone();
+    tooth2.position.set(31 * sc + t * 1.5 * sc, -5 * sc, -2.5 * sc);
+    group.add(tooth2);
+  }
+
+  // Yellow eye
+  const eyeGeom = new THREE.SphereGeometry(2.5 * sc, 6, 6);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+  const eyeR = new THREE.Mesh(eyeGeom, eyeMat);
+  eyeR.position.set(30 * sc, 3 * sc, 7 * sc);
+  group.add(eyeR);
+  const pupilGeom = new THREE.SphereGeometry(1.2 * sc, 6, 6);
+  const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const pupilR = new THREE.Mesh(pupilGeom, pupilMat);
+  pupilR.position.set(30.5 * sc, 3 * sc, 8 * sc);
+  group.add(pupilR);
+  const eyeL = eyeR.clone();
+  eyeL.position.set(30 * sc, 3 * sc, -7 * sc);
+  group.add(eyeL);
+  const pupilL = pupilR.clone();
+  pupilL.position.set(30.5 * sc, 3 * sc, -8 * sc);
+  group.add(pupilL);
+
+  return group;
+}
+
+function createClamMesh() {
+  const group = new THREE.Group();
+  // Top shell
+  const topGeom = new THREE.SphereGeometry(10, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  const topMat = new THREE.MeshLambertMaterial({ color: 0x9b8d7b });
+  const top = new THREE.Mesh(topGeom, topMat);
+  top.scale.set(1, 0.6, 0.8);
+  group.add(top);
+  // Bottom shell
+  const botGeom = new THREE.SphereGeometry(10, 8, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+  const botMat = new THREE.MeshLambertMaterial({ color: 0x8b7d6b });
+  const bot = new THREE.Mesh(botGeom, botMat);
+  bot.scale.set(1, 0.6, 0.8);
+  group.add(bot);
+  return group;
+}
+
+function createSeashellMesh() {
+  const group = new THREE.Group();
+  const geom = new THREE.SphereGeometry(6, 8, 6);
+  const mat = new THREE.MeshLambertMaterial({ color: 0xf0e0c0 });
+  const shell = new THREE.Mesh(geom, mat);
+  shell.scale.set(1, 0.5, 0.8);
+  shell.rotation.z = 0.3;
+  group.add(shell);
+  // Spiral detail
+  const spiralGeom = new THREE.TorusGeometry(3, 0.5, 4, 8, Math.PI * 1.5);
+  const spiralMat = new THREE.MeshLambertMaterial({ color: 0xd0c0a0 });
+  const spiral = new THREE.Mesh(spiralGeom, spiralMat);
+  spiral.position.y = 1;
+  group.add(spiral);
+  return group;
+}
+
+function createMeatMesh() {
+  const group = new THREE.Group();
+  const geom = new THREE.SphereGeometry(8, 8, 6);
+  const mat = new THREE.MeshLambertMaterial({ color: 0xcc4444 });
+  const meat = new THREE.Mesh(geom, mat);
+  meat.scale.set(1, 0.6, 0.8);
+  group.add(meat);
+  // Fat marbling
+  const fatGeom = new THREE.SphereGeometry(4, 6, 4);
+  const fatMat = new THREE.MeshLambertMaterial({ color: 0xffaaaa });
+  const fat = new THREE.Mesh(fatGeom, fatMat);
+  fat.position.set(2, 1, 0);
+  fat.scale.set(1, 0.5, 0.8);
+  group.add(fat);
+  return group;
+}
+
+// ============================================================
+// MESH MANAGEMENT
+// ============================================================
+const entityMeshMap = new Map(); // entity -> mesh
+let playerMesh = null;
+let familyMeshes = [];
+
+function getOrCreateMesh(entity) {
+  if (entityMeshMap.has(entity)) return entityMeshMap.get(entity);
+
+  let mesh;
+  switch (entity.type) {
+    case 'clam': mesh = createClamMesh(); break;
+    case 'seashell': mesh = createSeashellMesh(); break;
+    case 'clownfish': mesh = createClownfishMesh(); break;
+    case 'meat': mesh = createMeatMesh(); break;
+    case 'medfish': mesh = createMediumFishMesh(entity.color || '#668899'); break;
+    case 'orca': mesh = createOrcaMesh(); break;
+    case 'whale': mesh = createWhaleMesh(); break;
+    case 'megalodon': mesh = createMegalodonMesh(); break;
+    case 'mosasaurus': mesh = createMosasaurusMesh(); break;
+    default: mesh = createMeatMesh(); break;
+  }
+
+  scene.add(mesh);
+  entityMeshMap.set(entity, mesh);
+  return mesh;
+}
+
+function cleanupMeshes() {
+  const entitySet = new Set(entities);
+  for (const [entity, mesh] of entityMeshMap) {
+    if (!entitySet.has(entity)) {
+      scene.remove(mesh);
+      entityMeshMap.delete(entity);
+    }
+  }
+}
+
+function createPlayerMesh() {
+  if (playerMesh) scene.remove(playerMesh);
+  const skin = selectedFish === 0 ? SHOP_FISH[0].skins[selectedSkin] : 'normal';
+  playerMesh = createPiranhaMesh(skin);
+  scene.add(playerMesh);
+}
+
+function createFamilyMeshes() {
+  for (const m of familyMeshes) scene.remove(m);
+  familyMeshes = [];
+  for (let i = 0; i < family.length; i++) {
+    const mesh = createPiranhaMesh('normal');
+    scene.add(mesh);
+    familyMeshes.push(mesh);
+  }
+}
+
+// ============================================================
+// WORLD COORD -> 3D POSITION
+// ============================================================
+// Game world: x is horizontal (0..6000), y is vertical (0=top, 800=bottom)
+// Three.js: x = game x, y = game (WORLD_H - y) so bottom=0 top=800, z = depth variation
+function worldToScene(wx, wy) {
+  return { x: wx, y: WORLD_H - wy, z: 0 };
+}
+
+// ============================================================
+// CAMERA UPDATE (3D)
+// ============================================================
+const camTarget = new THREE.Vector3();
+const camPos = new THREE.Vector3();
+
+function updateCamera3D() {
+  const pos = worldToScene(player.x, player.y);
+  const dir = player.facingRight ? 1 : -1;
+
+  // Target: slightly ahead of the player
+  camTarget.set(pos.x + dir * 60, pos.y, 0);
+
+  // Camera position: behind and above and to the side
+  const desiredX = pos.x - dir * 180;
+  const desiredY = pos.y + 120;
+  const desiredZ = 280;
+
+  // Smooth follow
+  camPos.x += (desiredX - camPos.x) * 0.04;
+  camPos.y += (desiredY - camPos.y) * 0.04;
+  camPos.z += (desiredZ - camPos.z) * 0.04;
+
+  camera.position.copy(camPos);
+  camera.lookAt(camTarget);
 }
 
 // ============================================================
@@ -383,6 +1159,12 @@ let selectedSkin = parseInt(localStorage.getItem('deepFeastSkin')) || 0;
 let ownedFish = JSON.parse(localStorage.getItem('deepFeastOwned') || '[0]');
 
 function initEntities() {
+  // Clean up old meshes
+  for (const [entity, mesh] of entityMeshMap) {
+    scene.remove(mesh);
+  }
+  entityMeshMap.clear();
+
   entities = [];
   for (let x = 50; x < WORLD_W; x += 80 + Math.random() * 120) {
     if (Math.random() > 0.5) {
@@ -398,20 +1180,15 @@ function initEntities() {
       spawnClownfish(sx + (Math.random() - 0.5) * 80, sy + (Math.random() - 0.5) * 40);
     }
   }
-  // Medium fish
   for (let i = 0; i < 20; i++) {
     spawnMediumFish(200 + Math.random() * (WORLD_W - 400), 100 + Math.random() * (WORLD_H - 250));
   }
-  // Orcas
   const orcaPositions = [[1000, 400], [2500, 300], [4000, 500], [5000, 350], [3000, 600]];
   for (const [ox, oy] of orcaPositions) { spawnOrca(ox, oy); }
-  // Whales
   const whalePositions = [[1500, 450], [3500, 350], [5000, 500]];
   for (const [wx, wy] of whalePositions) { spawnWhale(wx, wy); }
-  // Megalodons
   const megaPositions = [[800, 400], [3000, 300], [5200, 500]];
   for (const [mx, my] of megaPositions) { spawnMegalodon(mx, my); }
-  // Mosasaurus
   const mosaPositions = [[2000, 500], [4500, 350]];
   for (const [mx, my] of mosaPositions) { spawnMosasaurus(mx, my); }
 }
@@ -422,6 +1199,11 @@ function initEntities() {
 const keysDown = {};
 let mouseDown = false;
 let mouseHoldTime = 0;
+
+// Use the renderer's canvas for input
+const gameCanvas = renderer.domElement;
+// Make overlay handle pointer events for menus
+const overlay = document.getElementById('overlay');
 
 document.addEventListener('keydown', (e) => {
   if (!gameStarted) {
@@ -439,7 +1221,8 @@ document.addEventListener('keydown', (e) => {
   }
 });
 document.addEventListener('keyup', (e) => { keysDown[e.code] = false; });
-canvas.addEventListener('mousedown', (e) => {
+
+function handlePointerDown(e) {
   e.preventDefault();
   if (!gameStarted) {
     gameStarted = true;
@@ -454,7 +1237,6 @@ canvas.addEventListener('mousedown', (e) => {
   }
   if (gameState === STATE_DEAD) {
     const pos = getClickPos(e);
-    const panelW = 260;
     const panelH = 200;
     const panelY = (CANVAS_H - panelH) / 2 - 20;
     const btnW = 180;
@@ -464,38 +1246,20 @@ canvas.addEventListener('mousedown', (e) => {
     return;
   }
   mouseDown = true; mouseHoldTime = 0;
-});
-canvas.addEventListener('mouseup', (e) => { mouseDown = false; mouseHoldTime = 0; });
-canvas.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  if (!gameStarted) {
-    gameStarted = true;
-    initAudio();
-    return;
-  }
-  initAudio();
-  if (gameState === STATE_SHOP) {
-    const pos = getClickPos(e);
-    handleShopClick(pos);
-    return;
-  }
-  if (gameState === STATE_DEAD) {
-    const pos = getClickPos(e);
-    const panelW = 260;
-    const panelH = 200;
-    const panelY = (CANVAS_H - panelH) / 2 - 20;
-    const btnW = 180;
-    const btnX = (CANVAS_W - btnW) / 2;
-    if (hitBtn(pos, btnX, panelY + 105, btnW, 32)) { respawnPlayer(); return; }
-    if (hitBtn(pos, btnX, panelY + 145, btnW, 32)) { gameState = STATE_SHOP; return; }
-    return;
-  }
-  mouseDown = true; mouseHoldTime = 0;
-});
-canvas.addEventListener('touchend', (e) => { mouseDown = false; mouseHoldTime = 0; });
+}
+
+function handlePointerUp(e) {
+  mouseDown = false; mouseHoldTime = 0;
+}
+
+// Attach to container so it catches both the WebGL canvas and overlay
+container.addEventListener('mousedown', handlePointerDown);
+container.addEventListener('mouseup', handlePointerUp);
+container.addEventListener('touchstart', handlePointerDown, { passive: false });
+container.addEventListener('touchend', handlePointerUp);
 
 function getClickPos(e) {
-  const rect = canvas.getBoundingClientRect();
+  const rect = container.getBoundingClientRect();
   const scaleX = CANVAS_W / rect.width;
   const scaleY = CANVAS_H / rect.height;
   if (e.touches) {
@@ -556,693 +1320,22 @@ function updatePlayer() {
 }
 
 // ============================================================
-// DRAWING
+// BUBBLES (game logic side - reused naming)
 // ============================================================
 let bubbles = [];
 
 function initBubbles() {
   bubbles = [];
-  for (let i = 0; i < 30; i++) {
-    bubbles.push({
-      x: Math.random() * WORLD_W,
-      y: Math.random() * WORLD_H,
-      r: 1 + Math.random() * 3,
-      speed: 0.3 + Math.random() * 0.8,
-      wobble: Math.random() * Math.PI * 2
-    });
-  }
+  initBubbles3D();
 }
 
 function updateBubbles() {
-  for (const b of bubbles) {
-    b.y -= b.speed;
-    b.x += Math.sin(b.wobble) * 0.3;
-    b.wobble += 0.03;
-    if (b.y < -10) {
-      b.y = WORLD_H + 10;
-      b.x = Math.random() * WORLD_W;
-    }
-  }
-}
-
-function drawBubbles() {
-  for (const b of bubbles) {
-    const proj = projectToScreen(b.x, b.y);
-    if (!proj) continue;
-    if (proj.sx < -10 || proj.sx > CANVAS_W + 10 || proj.sy < -10 || proj.sy > CANVAS_H + 10) continue;
-    const r = b.r * proj.scale;
-    if (r < 0.3) continue;
-    ctx.beginPath();
-    ctx.arc(proj.sx, proj.sy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(255,255,255,${0.25 * proj.scale})`;
-    ctx.lineWidth = 0.8 * proj.scale;
-    ctx.stroke();
-    ctx.fillStyle = `rgba(255,255,255,${0.06 * proj.scale})`;
-    ctx.fill();
-  }
-}
-
-function drawOceanBackground() {
-  // Deep blue gradient: light at bottom (near), dark at top (far/deep)
-  const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
-  grad.addColorStop(0, '#061830');   // far away - very dark deep blue
-  grad.addColorStop(0.15, '#0A2848');
-  grad.addColorStop(0.4, '#0E4070');
-  grad.addColorStop(0.7, '#1668A8');
-  grad.addColorStop(1, '#2090D0');   // near player - lighter blue
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-
-  // Light rays converging to vanishing point
-  ctx.save();
-  for (let i = 0; i < 7; i++) {
-    const angle = ((i - 3) * 0.14) + Math.sin(Date.now() * 0.0003 + i) * 0.02;
-    const rayLen = CANVAS_H * 0.95;
-    const baseX = VANISH_X + Math.sin(angle) * rayLen;
-    const baseW = 30 + i * 8;
-    ctx.globalAlpha = 0.035 + Math.sin(Date.now() * 0.001 + i * 1.2) * 0.015;
-    ctx.beginPath();
-    ctx.moveTo(VANISH_X, VANISH_Y);
-    ctx.lineTo(baseX - baseW, CANVAS_H);
-    ctx.lineTo(baseX + baseW, CANVAS_H);
-    ctx.closePath();
-    ctx.fillStyle = '#88CCFF';
-    ctx.fill();
-  }
-  ctx.restore();
-
-  // Subtle caustic light pattern on the "water surface" near player
-  ctx.save();
-  ctx.globalAlpha = 0.03;
-  for (let i = 0; i < 12; i++) {
-    const cx = (i * 55 + Date.now() * 0.01 * (i % 3 + 1)) % (CANVAS_W + 40) - 20;
-    const cy = CANVAS_H * 0.7 + Math.sin(Date.now() * 0.002 + i) * 30;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, 20 + i * 3, 8, 0.3, 0, Math.PI * 2);
-    ctx.fillStyle = '#AADDFF';
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
-function drawOceanFloor() {
-  // Draw perspective ground plane (ocean floor) receding into the distance
-  // The floor is the bottom portion of the world (y > WORLD_H - 60)
-
-  // Draw sand plane with perspective lines
-  ctx.save();
-
-  // Ground plane: trapezoid from near (wide at bottom) to far (narrow at horizon)
-  const nearLeft = -50;
-  const nearRight = CANVAS_W + 50;
-  const farLeft = VANISH_X - 60;
-  const farRight = VANISH_X + 60;
-  const nearY = GROUND_Y + 20;
-  const farY = VANISH_Y + (GROUND_Y - VANISH_Y) * 0.55; // floor starts a bit above horizon
-
-  // Sand gradient on the ground plane
-  const sandGrad = ctx.createLinearGradient(0, farY, 0, nearY);
-  sandGrad.addColorStop(0, '#6A5030');  // dark sand far away
-  sandGrad.addColorStop(0.3, '#8A6A40');
-  sandGrad.addColorStop(0.7, '#B08850');
-  sandGrad.addColorStop(1, '#C4A56B');  // light sand near
-  ctx.fillStyle = sandGrad;
-  ctx.beginPath();
-  ctx.moveTo(farLeft, farY);
-  ctx.lineTo(farRight, farY);
-  ctx.lineTo(nearRight, nearY);
-  ctx.lineTo(nearLeft, nearY);
-  ctx.closePath();
-  ctx.fill();
-
-  // Perspective grid lines on the floor for depth cue
-  ctx.strokeStyle = 'rgba(160,128,80,0.15)';
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 15; i++) {
-    const t = i / 15;
-    const lineY = farY + (nearY - farY) * t;
-    const lineLeft = farLeft + (nearLeft - farLeft) * t;
-    const lineRight = farRight + (nearRight - farRight) * t;
-    ctx.beginPath();
-    ctx.moveTo(lineLeft, lineY);
-    ctx.lineTo(lineRight, lineY);
-    ctx.stroke();
-  }
-
-  // Coral reef along the ocean floor in perspective
-  const floorWorldY = WORLD_H - 60;
-  const startTile = Math.floor((player.x - 400) / 150);
-  const endTile = Math.floor((player.x + 400) / 150) + 1;
-
-  // Collect and sort corals by depth
-  const corals = [];
-  for (let t = startTile; t <= endTile; t++) {
-    const coralWorldX = t * 150 + 75;
-    const coralWorldY = floorWorldY + (t % 3) * 5;
-    const proj = projectToScreen(coralWorldX, coralWorldY);
-    if (!proj) continue;
-    if (proj.sx < -80 || proj.sx > CANVAS_W + 80) continue;
-    corals.push({ t, proj });
-  }
-  // Draw far corals first
-  corals.sort((a, b) => a.proj.t - b.proj.t);
-
-  for (const { t, proj } of corals) {
-    const hue = (t * 73) % 360;
-    const sc = proj.scale;
-    const cx = proj.sx;
-    const cy = proj.sy;
-
-    // Main coral mound
-    ctx.fillStyle = `hsla(${hue}, 60%, ${35 + sc * 25}%, ${0.4 + sc * 0.6})`;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, (18 + (t % 3) * 8) * sc, (14 + (t % 4) * 5) * sc, 0, Math.PI, 0);
-    ctx.fill();
-
-    // Secondary coral branch
-    ctx.fillStyle = `hsla(${(hue + 40) % 360}, 55%, ${40 + sc * 25}%, ${0.3 + sc * 0.6})`;
-    ctx.beginPath();
-    ctx.ellipse(cx + 5 * sc, cy - 4 * sc, (10 + (t % 2) * 4) * sc, (9 + (t % 3) * 3) * sc, 0, Math.PI, 0);
-    ctx.fill();
-
-    // Small detail coral
-    if (sc > 0.4) {
-      ctx.fillStyle = `hsla(${(hue + 120) % 360}, 50%, 55%, ${0.3 + sc * 0.4})`;
-      ctx.beginPath();
-      ctx.ellipse(cx - 8 * sc, cy - 2 * sc, 6 * sc, 5 * sc, 0, Math.PI, 0);
-      ctx.fill();
-    }
-  }
-
-  ctx.restore();
-}
-
-function drawPiranha(x, y, size, facingRight, swimTimer, skin, biting, biteCharged, canHit) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(facingRight ? 1 : -1, 1);
-  const s = size;
-
-  // Tail (wags with swimTimer)
-  const tailWag = Math.sin(swimTimer * 8) * 0.3;
-  ctx.fillStyle = skin === 'skeleton' ? '#D0C8B8' : '#CC3300';
-  ctx.beginPath();
-  ctx.moveTo(-18 * s, 0);
-  ctx.lineTo(-28 * s, (-10 + tailWag * 10) * s);
-  ctx.lineTo(-28 * s, (10 + tailWag * 10) * s);
-  ctx.closePath();
-  ctx.fill();
-
-  // Body
-  ctx.fillStyle = skin === 'skeleton' ? '#E8E0D0' : '#FF4400';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 20 * s, 12 * s, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Belly
-  ctx.fillStyle = skin === 'skeleton' ? '#F0E8D8' : '#FF8844';
-  ctx.beginPath();
-  ctx.ellipse(2 * s, 4 * s, 14 * s, 6 * s, 0, 0, Math.PI);
-  ctx.fill();
-
-  if (skin === 'skeleton') {
-    ctx.strokeStyle = '#B0A898';
-    ctx.lineWidth = 1;
-    for (let i = -2; i <= 2; i++) {
-      ctx.beginPath();
-      ctx.moveTo(i * 5 * s, -6 * s);
-      ctx.lineTo(i * 5 * s, 6 * s);
-      ctx.stroke();
-    }
-  }
-
-  // Dorsal fin
-  ctx.fillStyle = skin === 'skeleton' ? '#C8C0B0' : '#CC2200';
-  ctx.beginPath();
-  ctx.moveTo(-4 * s, -10 * s);
-  ctx.lineTo(6 * s, -14 * s);
-  ctx.lineTo(8 * s, -10 * s);
-  ctx.closePath();
-  ctx.fill();
-
-  // Eye
-  ctx.beginPath();
-  ctx.arc(10 * s, -3 * s, 3.5 * s, 0, Math.PI * 2);
-  ctx.fillStyle = 'white';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(11 * s, -3 * s, 1.8 * s, 0, Math.PI * 2);
-  ctx.fillStyle = '#111';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(11.5 * s, -3.5 * s, 0.6 * s, 0, Math.PI * 2);
-  ctx.fillStyle = 'white';
-  ctx.fill();
-
-  // Mouth and bite visuals
-  if (biting) {
-    const teethColor = canHit ? '#FFD700' : '#FFFFFF';
-    const arcColor = canHit ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.2)';
-    const r = BITE_RANGE * s;
-    const cx = 20 * s;
-    const cy = 0;
-
-    // Bite range arc — upper jaw outline
-    ctx.strokeStyle = biteCharged ? 'rgba(255,215,0,0.6)' : arcColor;
-    ctx.lineWidth = biteCharged ? 3 : 2;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, -0.8, 0);
-    ctx.stroke();
-
-    // Bite range arc — lower jaw outline
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, 0.8);
-    ctx.stroke();
-
-    // 5 teeth spread across the full arc (pointing inward)
-    ctx.fillStyle = teethColor;
-    for (let t = 0; t < 5; t++) {
-      const angle = -0.65 + t * 0.325;
-      const bx = cx + Math.cos(angle) * r;
-      const by = cy + Math.sin(angle) * r;
-      const inX = cx + Math.cos(angle) * (r - 12 * s);
-      const inY = cy + Math.sin(angle) * (r - 12 * s);
-      ctx.beginPath();
-      ctx.moveTo(bx - Math.sin(angle) * 3 * s, by + Math.cos(angle) * 3 * s);
-      ctx.lineTo(inX, inY);
-      ctx.lineTo(bx + Math.sin(angle) * 3 * s, by - Math.cos(angle) * 3 * s);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Charged glow pulse
-    if (biteCharged) {
-      ctx.strokeStyle = `rgba(255,215,0,${0.2 + Math.sin(swimTimer * 10) * 0.15})`;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r + 5 * s, -0.8, 0.8);
-      ctx.stroke();
-    }
-  }
-
-  ctx.restore();
-}
-
-function drawClam(x, y, s) {
-  ctx.fillStyle = '#8B7D6B';
-  ctx.beginPath();
-  ctx.ellipse(x, y, 10 * s, 6 * s, 0, 0, Math.PI);
-  ctx.fill();
-  ctx.fillStyle = '#9B8D7B';
-  ctx.beginPath();
-  ctx.ellipse(x, y, 10 * s, 6 * s, 0, Math.PI, 0);
-  ctx.fill();
-  ctx.strokeStyle = '#7B6D5B';
-  ctx.lineWidth = 0.5;
-  for (let i = -2; i <= 2; i++) {
-    ctx.beginPath();
-    ctx.arc(x, y, (4 + Math.abs(i) * 2) * s, Math.PI, 0);
-    ctx.stroke();
-  }
-}
-
-function drawSeashell(x, y, s) {
-  ctx.fillStyle = '#F0E0C0';
-  ctx.beginPath();
-  ctx.ellipse(x, y, 6 * s, 4 * s, 0.3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#D0C0A0';
-  ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.arc(x, y, 3 * s, 0, Math.PI * 1.5);
-  ctx.stroke();
-}
-
-function drawClownfish(x, y, s, vx, swimTimer) {
-  ctx.save();
-  ctx.translate(x, y);
-  if (vx < 0) ctx.scale(-1, 1);
-  const tailWag = Math.sin(swimTimer * 10) * 0.2;
-  ctx.fillStyle = '#FF8C00';
-  ctx.beginPath();
-  ctx.moveTo(-10 * s, 0);
-  ctx.lineTo(-16 * s, (-5 + tailWag * 5) * s);
-  ctx.lineTo(-16 * s, (5 + tailWag * 5) * s);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#FF6600';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 12 * s, 7 * s, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = 'white';
-  ctx.fillRect(-1 * s, -7 * s, 2.5 * s, 14 * s);
-  ctx.fillRect(5 * s, -6 * s, 2 * s, 12 * s);
-  ctx.beginPath();
-  ctx.arc(7 * s, -2 * s, 2 * s, 0, Math.PI * 2);
-  ctx.fillStyle = 'white';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(7.5 * s, -2 * s, 1 * s, 0, Math.PI * 2);
-  ctx.fillStyle = 'black';
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawMeat(x, y, s) {
-  ctx.fillStyle = '#CC4444';
-  ctx.beginPath();
-  ctx.ellipse(x, y, 8 * s, 5 * s, 0.3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#FFAAAA';
-  ctx.beginPath();
-  ctx.ellipse(x + 2 * s, y - 1 * s, 4 * s, 2 * s, 0.3, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawMediumFish(x, y, s, vx, swimTimer, color) {
-  ctx.save();
-  ctx.translate(x, y);
-  if (vx < 0) ctx.scale(-1, 1);
-  const tw = Math.sin(swimTimer * 7) * 0.2;
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(-14 * s, 0);
-  ctx.lineTo(-22 * s, (-7 + tw * 7) * s);
-  ctx.lineTo(-22 * s, (7 + tw * 7) * s);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 16 * s, 9 * s, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(8 * s, -2 * s, 2.5 * s, 0, Math.PI * 2);
-  ctx.fillStyle = 'white';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(8.5 * s, -2 * s, 1.2 * s, 0, Math.PI * 2);
-  ctx.fillStyle = 'black';
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawOrca(x, y, s, vx, swimTimer) {
-  ctx.save();
-  ctx.translate(x, y);
-  if (vx < 0) ctx.scale(-1, 1);
-  const sc = s * 0.5;
-  const tw = Math.sin(swimTimer * 5) * 0.15;
-  ctx.fillStyle = '#1A1A1A';
-  ctx.beginPath();
-  ctx.moveTo(-22 * sc, 0);
-  ctx.lineTo(-34 * sc, (-10 + tw * 10) * sc);
-  ctx.lineTo(-34 * sc, (10 + tw * 10) * sc);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 24 * sc, 12 * sc, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#FFFFFF';
-  ctx.beginPath();
-  ctx.ellipse(2 * sc, 4 * sc, 18 * sc, 6 * sc, 0, 0, Math.PI);
-  ctx.fill();
-  ctx.fillStyle = '#FFFFFF';
-  ctx.beginPath();
-  ctx.ellipse(10 * sc, -4 * sc, 5 * sc, 3 * sc, 0.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(11 * sc, -4 * sc, 1.5 * sc, 0, Math.PI * 2);
-  ctx.fillStyle = '#111';
-  ctx.fill();
-  ctx.fillStyle = '#1A1A1A';
-  ctx.beginPath();
-  ctx.moveTo(-2 * sc, -12 * sc);
-  ctx.lineTo(4 * sc, -22 * sc);
-  ctx.lineTo(8 * sc, -12 * sc);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawWhale(x, y, s, vx, swimTimer) {
-  ctx.save();
-  ctx.translate(x, y);
-  if (vx < 0) ctx.scale(-1, 1);
-  const sc = s * 0.4;
-  const tw = Math.sin(swimTimer * 3) * 0.1;
-  ctx.fillStyle = '#3A5A7A';
-  ctx.beginPath();
-  ctx.moveTo(-30 * sc, 0);
-  ctx.lineTo(-45 * sc, (-12 + tw * 12) * sc);
-  ctx.lineTo(-45 * sc, (12 + tw * 12) * sc);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 35 * sc, 16 * sc, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#4A6A8A';
-  ctx.fill();
-  ctx.fillStyle = '#8AAABA';
-  ctx.beginPath();
-  ctx.ellipse(5 * sc, 6 * sc, 25 * sc, 8 * sc, 0, 0, Math.PI);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(20 * sc, -4 * sc, 2 * sc, 0, Math.PI * 2);
-  ctx.fillStyle = '#111';
-  ctx.fill();
-  ctx.strokeStyle = '#2A4A6A';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(28 * sc, 2 * sc);
-  ctx.quadraticCurveTo(32 * sc, 6 * sc, 25 * sc, 6 * sc);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawMegalodon(x, y, s, vx, swimTimer) {
-  ctx.save();
-  ctx.translate(x, y);
-  if (vx < 0) ctx.scale(-1, 1);
-  const sc = s * 0.35;
-  const tw = Math.sin(swimTimer * 4) * 0.15;
-  ctx.fillStyle = '#4A5A6A';
-  ctx.beginPath();
-  ctx.moveTo(-28 * sc, 0);
-  ctx.lineTo(-42 * sc, (-14 + tw * 14) * sc);
-  ctx.lineTo(-42 * sc, (14 + tw * 14) * sc);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 30 * sc, 14 * sc, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#5A6A7A';
-  ctx.fill();
-  ctx.fillStyle = '#8A9AAA';
-  ctx.beginPath();
-  ctx.ellipse(4 * sc, 5 * sc, 22 * sc, 7 * sc, 0, 0, Math.PI);
-  ctx.fill();
-  ctx.fillStyle = '#4A5A6A';
-  ctx.beginPath();
-  ctx.moveTo(-4 * sc, -14 * sc);
-  ctx.lineTo(6 * sc, -26 * sc);
-  ctx.lineTo(12 * sc, -14 * sc);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#3A4A5A';
-  ctx.beginPath();
-  ctx.moveTo(22 * sc, 4 * sc);
-  ctx.lineTo(32 * sc, 6 * sc);
-  ctx.lineTo(22 * sc, 10 * sc);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = 'white';
-  for (let t = 0; t < 5; t++) {
-    ctx.beginPath();
-    ctx.arc(24 * sc + t * 1.5 * sc, 5 * sc, 1 * sc, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.beginPath();
-  ctx.arc(16 * sc, -3 * sc, 2.5 * sc, 0, Math.PI * 2);
-  ctx.fillStyle = '#CC0000';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(16.5 * sc, -3 * sc, 1.2 * sc, 0, Math.PI * 2);
-  ctx.fillStyle = 'black';
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawMosasaurus(x, y, s, vx, swimTimer) {
-  ctx.save();
-  ctx.translate(x, y);
-  if (vx < 0) ctx.scale(-1, 1);
-  const sc = s * 0.3;
-  const tw = Math.sin(swimTimer * 3) * 0.12;
-  ctx.fillStyle = '#2A4A2A';
-  ctx.beginPath();
-  ctx.moveTo(-30 * sc, 0);
-  ctx.quadraticCurveTo(-45 * sc, tw * 20 * sc, -55 * sc, tw * 15 * sc);
-  ctx.quadraticCurveTo(-45 * sc, tw * 10 * sc + 5 * sc, -30 * sc, 4 * sc);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 32 * sc, 12 * sc, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#3A6A3A';
-  ctx.fill();
-  ctx.fillStyle = '#6A9A6A';
-  ctx.beginPath();
-  ctx.ellipse(5 * sc, 5 * sc, 24 * sc, 6 * sc, 0, 0, Math.PI);
-  ctx.fill();
-  ctx.fillStyle = '#2A5A2A';
-  ctx.beginPath();
-  ctx.ellipse(-8 * sc, 10 * sc, 10 * sc, 3 * sc, 0.4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(8 * sc, 10 * sc, 10 * sc, 3 * sc, -0.4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#3A6A3A';
-  ctx.beginPath();
-  ctx.ellipse(26 * sc, -1 * sc, 12 * sc, 7 * sc, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#2A4A2A';
-  ctx.beginPath();
-  ctx.moveTo(30 * sc, 2 * sc);
-  ctx.lineTo(40 * sc, 3 * sc);
-  ctx.lineTo(30 * sc, 6 * sc);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = 'white';
-  for (let t = 0; t < 6; t++) {
-    ctx.beginPath();
-    ctx.arc(31 * sc + t * 1.5 * sc, 3 * sc, 0.8 * sc, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.beginPath();
-  ctx.arc(30 * sc, -3 * sc, 2.5 * sc, 0, Math.PI * 2);
-  ctx.fillStyle = '#FFCC00';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(30.5 * sc, -3 * sc, 1.2 * sc, 0, Math.PI * 2);
-  ctx.fillStyle = 'black';
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawEntityHealthBar(sx, sy, entity, perspScale) {
-  if (entity.health >= entity.maxHealth) return;
-  if (!['orca', 'whale', 'megalodon', 'mosasaurus'].includes(entity.type)) return;
-  const sc = perspScale || 1;
-  const barW = 30 * entity.size * 0.3 * sc;
-  const barH = 3 * sc;
-  const bx = sx - barW / 2;
-  const by = sy - 18 * entity.size * 0.4 * sc;
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(bx, by, barW, barH);
-  const pct = entity.health / entity.maxHealth;
-  ctx.fillStyle = pct > 0.5 ? '#44CC44' : (pct > 0.25 ? '#CCAA22' : '#CC3333');
-  ctx.fillRect(bx, by, barW * pct, barH);
+  updateBubbles3D();
 }
 
 // ============================================================
-// BEHIND-THE-FISH PLAYER DRAWING
+// ENTITY AI UPDATE
 // ============================================================
-function drawPlayerFromBehind(screenX, screenY, size, swimTimer, biting, biteCharged, canHit) {
-  ctx.save();
-  ctx.translate(screenX, screenY);
-  const s = size;
-
-  // Tail (wagging left/right as seen from behind)
-  const tailWag = Math.sin(swimTimer * 8) * 0.3;
-  const tailSpread = Math.sin(swimTimer * 8 + 0.5) * 0.15;
-
-  // Shadow under the fish
-  ctx.fillStyle = 'rgba(0,0,0,0.15)';
-  ctx.beginPath();
-  ctx.ellipse(0, 14 * s, 16 * s, 4 * s, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Tail fin (behind the body, spread as V-shape from behind)
-  ctx.fillStyle = '#CC3300';
-  ctx.beginPath();
-  ctx.moveTo(0, -2 * s);
-  ctx.lineTo((-10 - tailSpread * 10) * s, (-18 + tailWag * 6) * s);
-  ctx.lineTo((-4) * s, (-8) * s);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(0, -2 * s);
-  ctx.lineTo((10 + tailSpread * 10) * s, (-18 + tailWag * 6) * s);
-  ctx.lineTo((4) * s, (-8) * s);
-  ctx.closePath();
-  ctx.fill();
-
-  // Body from behind (rounder oval seen from back)
-  ctx.fillStyle = '#FF4400';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 14 * s, 12 * s, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Belly highlight (lighter underside visible from behind)
-  ctx.fillStyle = '#FF8844';
-  ctx.beginPath();
-  ctx.ellipse(0, 5 * s, 10 * s, 6 * s, 0, 0, Math.PI);
-  ctx.fill();
-
-  // Dorsal fin on top
-  ctx.fillStyle = '#CC2200';
-  ctx.beginPath();
-  ctx.moveTo(-2 * s, -12 * s);
-  ctx.lineTo(0, -20 * s);
-  ctx.lineTo(2 * s, -12 * s);
-  ctx.closePath();
-  ctx.fill();
-
-  // Side fins (pectoral fins sticking out left/right)
-  const finFlap = Math.sin(swimTimer * 6) * 0.2;
-  ctx.fillStyle = '#DD3300';
-  // Left fin
-  ctx.beginPath();
-  ctx.moveTo(-12 * s, 0);
-  ctx.lineTo((-20 - finFlap * 5) * s, (4 + finFlap * 3) * s);
-  ctx.lineTo(-12 * s, 6 * s);
-  ctx.closePath();
-  ctx.fill();
-  // Right fin
-  ctx.beginPath();
-  ctx.moveTo(12 * s, 0);
-  ctx.lineTo((20 + finFlap * 5) * s, (4 + finFlap * 3) * s);
-  ctx.lineTo(12 * s, 6 * s);
-  ctx.closePath();
-  ctx.fill();
-
-  // Back texture / scale hints
-  ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-  ctx.lineWidth = 0.5 * s;
-  for (let i = -2; i <= 2; i++) {
-    ctx.beginPath();
-    ctx.arc(0, -2 * s, (5 + Math.abs(i) * 3) * s, Math.PI * 0.3, Math.PI * 0.7);
-    ctx.stroke();
-  }
-
-  // Bite indicator (glowing aura when biting)
-  if (biting) {
-    const glowColor = canHit ? 'rgba(255,215,0,' : 'rgba(255,255,255,';
-    const pulse = 0.2 + Math.sin(swimTimer * 10) * 0.1;
-    ctx.beginPath();
-    ctx.arc(0, 8 * s, 20 * s, 0, Math.PI * 2);
-    ctx.strokeStyle = glowColor + (biteCharged ? pulse + 0.3 : pulse) + ')';
-    ctx.lineWidth = biteCharged ? 3 : 2;
-    ctx.stroke();
-
-    if (biteCharged) {
-      ctx.beginPath();
-      ctx.arc(0, 8 * s, 24 * s, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(255,215,0,${pulse})`;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-  }
-
-  ctx.restore();
-}
-
 function updateEntities() {
   for (const e of entities) {
     if (e.type === 'clownfish') {
@@ -1369,7 +1462,6 @@ function updateEntities() {
       if (e.y < 40 || e.y > WORLD_H - 100) e.vy *= -1;
     }
   }
-  // Remove dead entities
   for (let i = entities.length - 1; i >= 0; i--) {
     if (entities[i].health < 0) entities.splice(i, 1);
   }
@@ -1428,7 +1520,6 @@ function updateBiteCollision() {
     if (dist < hitDist) {
       player.canHitSomething = true;
 
-      // Meat chopping: if meat is too big, break it down
       if (e.type === 'meat' && e.size > player.size * 0.8) {
         if (mouseHoldTime < FIXED_DT * 2) {
           const halfSize = e.size / 2;
@@ -1439,7 +1530,6 @@ function updateBiteCollision() {
         break;
       }
 
-      // Latch onto living fish (not clams/seashells/meat)
       if (!['clam', 'seashell', 'meat'].includes(e.type) && mouseHoldTime < FIXED_DT * 2 && !player.latchTarget) {
         player.latchTarget = e;
         player.latchTimer = 0;
@@ -1487,27 +1577,22 @@ function updateLatch() {
     return;
   }
 
-  // Move with target
   player.x = e.x + player.latchOffsetX;
   player.y = e.y + player.latchOffsetY;
 
-  // Deal continuous damage
   const dps = player.biteCharged ? player.biteForce * BITE_DAMAGE_MULT : player.biteForce;
   e.health -= dps * FIXED_DT;
 
   player.latchTimer += FIXED_DT;
 
-  // Auto-release after max time
   if (player.latchTimer >= player.latchMaxTime) {
     player.latchTarget = null;
   }
 
-  // Release on mouse release (after initial grab)
   if (!mouseDown && player.latchTimer > 0.2) {
     player.latchTarget = null;
   }
 
-  // Kill target if health depleted
   if (e.health <= 0) {
     if (e.meatCount) dropMeat(e.x, e.y, e.meatCount, e.size);
     if (!e.meatCount) {
@@ -1580,7 +1665,172 @@ function updateFamily() {
   }
 }
 
+function replenishFood() {
+  let clamCount = 0, clownCount = 0;
+  for (const e of entities) {
+    if (e.type === 'clam' || e.type === 'seashell') clamCount++;
+    if (e.type === 'clownfish') clownCount++;
+  }
+  if (clamCount < 30) {
+    const x = Math.random() * WORLD_W;
+    if (Math.random() > 0.5) spawnClam(x, WORLD_H - 70 + Math.random() * 10);
+    else spawnSeashell(x, WORLD_H - 68 + Math.random() * 8);
+  }
+  if (clownCount < 40) {
+    spawnClownfish(Math.random() * WORLD_W, 100 + Math.random() * (WORLD_H - 250));
+  }
+}
+
+function respawnPlayer() {
+  player.x = 300;
+  player.y = 400;
+  player.size = [1.0, 1.3, 2.5, 2.8, 3.5][selectedFish];
+  player.biteForce = [10, 15, 20, 35, 50][selectedFish];
+  player.maxHealth = [100, 150, 300, 500, 800][selectedFish];
+  player.health = player.maxHealth;
+  player.alive = true;
+  player.sprinting = false;
+  player.staminaLeft = SPRINT_MAX;
+  coinsThisRun = 0;
+  respawnQueue = [];
+  gameState = STATE_PLAYING;
+  initEntities();
+  initFamily();
+  initBubbles();
+  createPlayerMesh();
+  createFamilyMeshes();
+}
+
+function handleShopClick(pos) {
+  const cardW = 250;
+  const cardH = 55;
+  const startX = (CANVAS_W - cardW) / 2;
+  const startY = 90;
+  const gap = 62;
+
+  for (let i = 0; i < SHOP_FISH.length; i++) {
+    const cy = startY + i * gap;
+    if (hitBtn(pos, startX, cy, cardW, cardH)) {
+      const fish = SHOP_FISH[i];
+      const owned = ownedFish.includes(i);
+
+      if (owned) {
+        selectedFish = i;
+        localStorage.setItem('deepFeastFish', selectedFish);
+        if (i === 0) {
+          selectedSkin = (selectedSkin + 1) % SHOP_FISH[0].skins.length;
+          localStorage.setItem('deepFeastSkin', selectedSkin);
+        }
+      } else {
+        const canBuy = player.coins >= fish.cost && (!fish.requireKill || localStorage.getItem(fish.requireKill));
+        if (canBuy) {
+          player.coins -= fish.cost;
+          ownedFish.push(i);
+          selectedFish = i;
+          localStorage.setItem('deepFeastCoins', player.coins);
+          localStorage.setItem('deepFeastOwned', JSON.stringify(ownedFish));
+          localStorage.setItem('deepFeastFish', selectedFish);
+        }
+      }
+      return;
+    }
+  }
+
+  const backW = 120;
+  const backH = 32;
+  const backX = (CANVAS_W - backW) / 2;
+  const backY = CANVAS_H - 60;
+  if (hitBtn(pos, backX, backY, backW, backH)) {
+    gameState = STATE_DEAD;
+  }
+}
+
+// ============================================================
+// 3D SYNC - update mesh positions from game state
+// ============================================================
+function syncMeshes() {
+  // Sync entities
+  for (const e of entities) {
+    const mesh = getOrCreateMesh(e);
+    const pos = worldToScene(e.x, e.y);
+    mesh.position.set(pos.x, pos.y, 0);
+    mesh.scale.set(e.size, e.size, e.size);
+
+    // Face movement direction for fish types
+    if (e.vx !== undefined && e.vx !== 0 && !['clam', 'seashell', 'meat'].includes(e.type)) {
+      mesh.rotation.y = e.vx > 0 ? 0 : Math.PI;
+    }
+
+    // Tail wag animation
+    const tail = mesh.getObjectByName('tail');
+    if (tail && e.swimTimer !== undefined) {
+      const wagSpeed = e.type === 'whale' ? 3 : (e.type === 'clownfish' ? 10 : 6);
+      tail.rotation.y = Math.sin((e.swimTimer || 0) * wagSpeed) * 0.3;
+    }
+  }
+
+  // Sync player
+  if (playerMesh && player.alive) {
+    const pos = worldToScene(player.x, player.y);
+    playerMesh.position.set(pos.x, pos.y, 0);
+    playerMesh.scale.set(player.size, player.size, player.size);
+    playerMesh.rotation.y = player.facingRight ? 0 : Math.PI;
+
+    // Tail wag
+    const tail = playerMesh.getObjectByName('tail');
+    if (tail) {
+      tail.rotation.y = Math.sin(player.swimTimer * 8) * 0.3;
+    }
+
+    // Bite indicator
+    const biteGroup = playerMesh.getObjectByName('biteGroup');
+    if (biteGroup) {
+      biteGroup.visible = player.biting;
+      if (player.biting) {
+        const ring = biteGroup.getObjectByName('biteRing');
+        if (ring) {
+          const col = player.canHitSomething ? 0xffd700 : 0xffffff;
+          ring.material.color.setHex(col);
+          ring.material.opacity = player.biteCharged ? 0.6 + Math.sin(player.swimTimer * 10) * 0.2 : 0.4;
+        }
+        // Color teeth
+        biteGroup.traverse((child) => {
+          if (child.name === 'tooth') {
+            child.material.color.setHex(player.canHitSomething ? 0xffd700 : 0xffffff);
+          }
+        });
+      }
+    }
+  } else if (playerMesh && !player.alive) {
+    playerMesh.position.set(-9999, -9999, -9999); // hide
+  }
+
+  // Sync family
+  for (let i = 0; i < family.length; i++) {
+    if (i >= familyMeshes.length) break;
+    const f = family[i];
+    const mesh = familyMeshes[i];
+    const pos = worldToScene(f.x, f.y);
+    mesh.position.set(pos.x, pos.y, 0);
+    mesh.scale.set(f.size, f.size, f.size);
+    const facingRight = f.x < player.x;
+    mesh.rotation.y = facingRight ? 0 : Math.PI;
+
+    const tail = mesh.getObjectByName('tail');
+    if (tail) {
+      tail.rotation.y = Math.sin(f.swimTimer * 8) * 0.3;
+    }
+  }
+
+  // Clean up removed entities
+  cleanupMeshes();
+}
+
+// ============================================================
+// HUD DRAWING (2D overlay canvas)
+// ============================================================
 function drawHUD() {
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
   ctx.save();
 
   // Coins (top-left)
@@ -1663,6 +1913,7 @@ function drawHUD() {
 }
 
 function drawDeathMenu() {
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
@@ -1717,25 +1968,8 @@ function drawDeathMenu() {
   ctx.restore();
 }
 
-function respawnPlayer() {
-  player.x = 300;
-  player.y = 400;
-  player.size = [1.0, 1.3, 2.5, 2.8, 3.5][selectedFish];
-  player.biteForce = [10, 15, 20, 35, 50][selectedFish];
-  player.maxHealth = [100, 150, 300, 500, 800][selectedFish];
-  player.health = player.maxHealth;
-  player.alive = true;
-  player.sprinting = false;
-  player.staminaLeft = SPRINT_MAX;
-  coinsThisRun = 0;
-  respawnQueue = [];
-  gameState = STATE_PLAYING;
-  initEntities();
-  initFamily();
-  initBubbles();
-}
-
 function drawShop() {
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
@@ -1820,71 +2054,8 @@ function drawShop() {
   ctx.restore();
 }
 
-function handleShopClick(pos) {
-  const cardW = 250;
-  const cardH = 55;
-  const startX = (CANVAS_W - cardW) / 2;
-  const startY = 90;
-  const gap = 62;
-
-  for (let i = 0; i < SHOP_FISH.length; i++) {
-    const cy = startY + i * gap;
-    if (hitBtn(pos, startX, cy, cardW, cardH)) {
-      const fish = SHOP_FISH[i];
-      const owned = ownedFish.includes(i);
-
-      if (owned) {
-        selectedFish = i;
-        localStorage.setItem('deepFeastFish', selectedFish);
-        if (i === 0) {
-          selectedSkin = (selectedSkin + 1) % SHOP_FISH[0].skins.length;
-          localStorage.setItem('deepFeastSkin', selectedSkin);
-        }
-      } else {
-        const canBuy = player.coins >= fish.cost && (!fish.requireKill || localStorage.getItem(fish.requireKill));
-        if (canBuy) {
-          player.coins -= fish.cost;
-          ownedFish.push(i);
-          selectedFish = i;
-          localStorage.setItem('deepFeastCoins', player.coins);
-          localStorage.setItem('deepFeastOwned', JSON.stringify(ownedFish));
-          localStorage.setItem('deepFeastFish', selectedFish);
-        }
-      }
-      return;
-    }
-  }
-
-  const backW = 120;
-  const backH = 32;
-  const backX = (CANVAS_W - backW) / 2;
-  const backY = CANVAS_H - 60;
-  if (hitBtn(pos, backX, backY, backW, backH)) {
-    gameState = STATE_DEAD;
-  }
-}
-
-function replenishFood() {
-  let clamCount = 0, clownCount = 0;
-  for (const e of entities) {
-    if (e.type === 'clam' || e.type === 'seashell') clamCount++;
-    if (e.type === 'clownfish') clownCount++;
-  }
-  if (clamCount < 30) {
-    const x = Math.random() * WORLD_W;
-    if (Math.random() > 0.5) spawnClam(x, WORLD_H - 70 + Math.random() * 10);
-    else spawnSeashell(x, WORLD_H - 68 + Math.random() * 8);
-  }
-  if (clownCount < 40) {
-    spawnClownfish(Math.random() * WORLD_W, 100 + Math.random() * (WORLD_H - 250));
-  }
-}
-
 function drawTitleScreen() {
-  drawOceanBackground();
-  drawOceanFloor();
-  drawBubbles();
-
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
@@ -1914,6 +2085,49 @@ function drawTitleScreen() {
 }
 
 // ============================================================
+// LIGHT RAY ANIMATION
+// ============================================================
+function animateLightRays(time) {
+  for (let i = 0; i < rayGroup.children.length; i++) {
+    const ray = rayGroup.children[i];
+    ray.material.opacity = 0.02 + Math.sin(time * 0.001 + i * 1.2) * 0.015;
+  }
+}
+
+// ============================================================
+// ENTITY HEALTH BARS (3D -> projected to HUD)
+// ============================================================
+function drawEntityHealthBars() {
+  const tempVec = new THREE.Vector3();
+  for (const e of entities) {
+    if (e.health >= e.maxHealth) continue;
+    if (!['orca', 'whale', 'megalodon', 'mosasaurus'].includes(e.type)) continue;
+
+    const mesh = entityMeshMap.get(e);
+    if (!mesh) continue;
+
+    tempVec.setFromMatrixPosition(mesh.matrixWorld);
+    tempVec.y += 20 * e.size;
+    tempVec.project(camera);
+
+    const sx = (tempVec.x * 0.5 + 0.5) * CANVAS_W;
+    const sy = (-tempVec.y * 0.5 + 0.5) * CANVAS_H;
+
+    if (tempVec.z > 1 || sx < -50 || sx > CANVAS_W + 50 || sy < -50 || sy > CANVAS_H + 50) continue;
+
+    const barW = 40;
+    const barH = 4;
+    const bx = sx - barW / 2;
+    const by = sy;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(bx, by, barW, barH);
+    const pctHP = e.health / e.maxHealth;
+    ctx.fillStyle = pctHP > 0.5 ? '#44CC44' : (pctHP > 0.25 ? '#CCAA22' : '#CC3333');
+    ctx.fillRect(bx, by, barW * pctHP, barH);
+  }
+}
+
+// ============================================================
 // GAME LOOP
 // ============================================================
 function gameLoop(timestamp) {
@@ -1933,7 +2147,6 @@ function gameLoop(timestamp) {
       updateBiteCollision();
       updateLatch();
       updateEnemyDamage();
-      updateCamera(player.x, player.y);
       updateRespawns();
       replenishCounter++;
       if (replenishCounter >= 60) {
@@ -1943,88 +2156,54 @@ function gameLoop(timestamp) {
     }
   }
 
-  // Draw
-  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+  // Sync 3D meshes from game state
+  if (gameStarted) {
+    syncMeshes();
+    updateCamera3D();
+  }
 
+  // Animate environment
+  animateLightRays(timestamp);
+
+  // Render 3D scene
+  renderer.render(scene, camera);
+
+  // Draw 2D HUD overlay
   if (!gameStarted) {
     drawTitleScreen();
     requestAnimationFrame(gameLoop);
     return;
   }
 
-  drawOceanBackground();
-  drawOceanFloor();
-
-  // Collect all drawable things with their projected positions for depth sorting
-  const drawList = [];
-
-  // Project entities
-  for (const e of entities) {
-    const proj = projectToScreen(e.x, e.y);
-    if (!proj) continue;
-    if (proj.sx < -80 || proj.sx > CANVAS_W + 80 || proj.sy < -80 || proj.sy > CANVAS_H + 80) continue;
-    drawList.push({ kind: 'entity', e, proj });
-  }
-
-  // Project family
-  for (const f of family) {
-    const proj = projectToScreen(f.x, f.y);
-    if (!proj) continue;
-    if (proj.sx < -80 || proj.sx > CANVAS_W + 80 || proj.sy < -80 || proj.sy > CANVAS_H + 80) continue;
-    drawList.push({ kind: 'family', f, proj });
-  }
-
-  // Add player (always drawn, at fixed-ish position)
-  const playerProj = projectToScreen(player.x, player.y);
-  if (playerProj) {
-    drawList.push({ kind: 'player', proj: playerProj });
-  }
-
-  // Sort by depth: far (high t) drawn first, near (low t) drawn last (on top)
-  drawList.sort((a, b) => b.proj.t - a.proj.t);
-
-  // Draw everything in depth order
-  for (const item of drawList) {
-    const { sx, sy, scale } = item.proj;
-    if (item.kind === 'entity') {
-      const e = item.e;
-      const s = e.size * scale;
-      if (e.type === 'clam') drawClam(sx, sy, s);
-      else if (e.type === 'seashell') drawSeashell(sx, sy, s);
-      else if (e.type === 'clownfish') drawClownfish(sx, sy, s, e.vx, e.swimTimer || 0);
-      else if (e.type === 'meat') drawMeat(sx, sy, s);
-      else if (e.type === 'medfish') drawMediumFish(sx, sy, s, e.vx, e.swimTimer || 0, e.color);
-      else if (e.type === 'orca') drawOrca(sx, sy, s, e.vx, e.swimTimer || 0);
-      else if (e.type === 'whale') drawWhale(sx, sy, s, e.vx, e.swimTimer || 0);
-      else if (e.type === 'megalodon') drawMegalodon(sx, sy, s, e.vx, e.swimTimer || 0);
-      else if (e.type === 'mosasaurus') drawMosasaurus(sx, sy, s, e.vx, e.swimTimer || 0);
-      drawEntityHealthBar(sx, sy, e, scale);
-    } else if (item.kind === 'family') {
-      const f = item.f;
-      const s = f.size * scale;
-      const facingRight = f.x < player.x ? true : (f.x > player.x ? false : player.facingRight);
-      drawPiranha(sx, sy, s, facingRight, f.swimTimer, 'normal', false, false, false);
-    } else if (item.kind === 'player') {
-      drawPlayerFromBehind(sx, sy, player.size * scale, player.swimTimer, player.biting, player.biteCharged, player.canHitSomething);
-    }
-  }
-
-  drawBubbles();
-
   if (gameState === STATE_SHOP) {
     drawShop();
+    overlay.classList.add('active');
   } else if (gameState === STATE_DEAD) {
     drawDeathMenu();
+    overlay.classList.add('active');
   } else if (gameState === STATE_PLAYING) {
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     drawHUD();
+    drawEntityHealthBars();
+    overlay.classList.remove('active');
   }
 
   requestAnimationFrame(gameLoop);
 }
 
+// ============================================================
+// INIT
+// ============================================================
 initEntities();
 initFamily();
 initBubbles();
+createPlayerMesh();
+createFamilyMeshes();
+
+// Initialize camera position
+const initPos = worldToScene(player.x, player.y);
+camPos.set(initPos.x - 180, initPos.y + 120, 280);
+
 requestAnimationFrame((t) => { lastTime = t; gameLoop(t); });
 </script>
 </body>
