@@ -687,24 +687,61 @@ function drawPiranha(x, y, size, facingRight, swimTimer, skin, biting, biteCharg
 
   // Mouth and bite visuals
   if (biting) {
+    const mouthColor = canHit ? '#FFD700' : (skin === 'skeleton' ? '#3A2A1A' : '#440000');
     const teethColor = canHit ? '#FFD700' : '#FFFFFF';
+    const jawOpen = Math.min(1, mouseHoldTime * 3); // opens over 0.3s
 
-    // Open mouth
+    // Upper jaw
+    ctx.fillStyle = skin === 'skeleton' ? '#D0C8B8' : '#CC3300';
     ctx.beginPath();
-    ctx.arc(18 * s, 2 * s, 6 * s, -0.5, 0.5);
-    ctx.lineTo(18 * s, 2 * s);
+    ctx.moveTo(14 * s, -2 * s);
+    ctx.lineTo(22 * s, -2 * s - jawOpen * 4 * s);
+    ctx.lineTo(24 * s, 0);
+    ctx.lineTo(14 * s, 0);
     ctx.closePath();
-    ctx.fillStyle = '#440000';
     ctx.fill();
 
-    // Teeth
+    // Lower jaw
+    ctx.beginPath();
+    ctx.moveTo(14 * s, 2 * s);
+    ctx.lineTo(22 * s, 2 * s + jawOpen * 5 * s);
+    ctx.lineTo(24 * s, 2 * s);
+    ctx.lineTo(14 * s, 2 * s);
+    ctx.closePath();
+    ctx.fill();
+
+    // Mouth interior (dark)
+    ctx.fillStyle = mouthColor;
+    ctx.beginPath();
+    ctx.moveTo(14 * s, -1 * s);
+    ctx.lineTo(21 * s, -1 * s - jawOpen * 3 * s);
+    ctx.lineTo(21 * s, 1 * s + jawOpen * 4 * s);
+    ctx.lineTo(14 * s, 3 * s);
+    ctx.closePath();
+    ctx.fill();
+
+    // Upper teeth (sharp triangles)
     ctx.fillStyle = teethColor;
-    for (let t = 0; t < 4; t++) {
-      const angle = -0.4 + t * 0.25;
-      const tx = 18 * s + Math.cos(angle) * 6 * s;
-      const ty = 2 * s + Math.sin(angle) * 6 * s;
+    for (let t = 0; t < 5; t++) {
+      const tx = (15 + t * 1.4) * s;
+      const tBase = -1 * s - jawOpen * 3 * s * (1 - t * 0.15);
       ctx.beginPath();
-      ctx.arc(tx, ty, 1.2 * s, 0, Math.PI * 2);
+      ctx.moveTo(tx - 0.8 * s, tBase);
+      ctx.lineTo(tx, tBase + 2.5 * s);
+      ctx.lineTo(tx + 0.8 * s, tBase);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Lower teeth (sharp triangles pointing up)
+    for (let t = 0; t < 5; t++) {
+      const tx = (15 + t * 1.4) * s;
+      const tBase = 2 * s + jawOpen * 4 * s * (1 - t * 0.15);
+      ctx.beginPath();
+      ctx.moveTo(tx - 0.8 * s, tBase);
+      ctx.lineTo(tx, tBase - 2.5 * s);
+      ctx.lineTo(tx + 0.8 * s, tBase);
+      ctx.closePath();
       ctx.fill();
     }
 
